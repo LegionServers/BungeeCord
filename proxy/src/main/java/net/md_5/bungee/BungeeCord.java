@@ -195,6 +195,7 @@ public class BungeeCord extends ProxyServer
         bungee.getLogger().info( "Enabled BungeeCord version " + bungee.getVersion() );
         bungee.start();
 
+        /* Disable bungee console - not needed, fills logs with ">"s
         while ( bungee.isRunning )
         {
             String line = bungee.getConsoleReader().readLine( ">" );
@@ -206,6 +207,7 @@ public class BungeeCord extends ProxyServer
                 }
             }
         }
+        */
     }
 
     /**
