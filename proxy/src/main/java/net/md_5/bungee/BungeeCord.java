@@ -179,7 +179,7 @@ public class BungeeCord extends ProxyServer
      */
     public static void main(String[] args) throws Exception
     {
-        Calendar deadline = Calendar.getInstance();
+        /*Calendar deadline = Calendar.getInstance();
         deadline.set( 2013, 7, 24 ); // year, month, date
         if ( Calendar.getInstance().after( deadline ) )
         {
@@ -188,7 +188,7 @@ public class BungeeCord extends ProxyServer
             System.err.println( "*** You will get NO support regarding this build ***" );
             System.err.println( "*** Server will start in 15 seconds ***" );
             Thread.sleep( TimeUnit.SECONDS.toMillis( 15 ) );
-        }
+        }*/
 
         BungeeCord bungee = new BungeeCord();
         ProxyServer.setInstance( bungee );
