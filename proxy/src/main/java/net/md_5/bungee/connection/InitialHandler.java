@@ -183,7 +183,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             forced.ping( pingBack );
         } else
         {
-            pingBack.done( new ServerPing( bungee.getProtocolVersion(), bungee.getGameVersion(), motd, bungee.getOnlineCount(), listener.getMaxPlayers() ), null );
+            pingBack.done( new ServerPing( bungee.getProtocolVersion(), bungee.getGameVersion(), listener.getMotd(), bungee.getOnlineCount(), listener.getMaxPlayers() ), null );
         }
     }
 
