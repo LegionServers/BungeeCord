@@ -28,7 +28,13 @@ public class ChannelWrapper
         ch.pipeline().get( MinecraftEncoder.class ).setProtocol( protocol );
     }
 
-    public synchronized void write(Object packet)
+    public void setVersion(int protocol)
+    {
+        ch.pipeline().get( MinecraftDecoder.class ).setProtocolVersion( protocol );
+        ch.pipeline().get( MinecraftEncoder.class ).setProtocolVersion( protocol );
+    }
+
+    public void write(Object packet)
     {
         if ( !closed )
         {
@@ -44,7 +50,7 @@ public class ChannelWrapper
         }
     }
 
-    public synchronized void close()
+    public void close()
     {
         if ( !closed )
         {

@@ -7,30 +7,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ComponentBuilder simplifies creating basic messages by allowing
- * the use of a chainable builder.
+ * ComponentBuilder simplifies creating basic messages by allowing the use of a
+ * chainable builder.
  * <p/>
- * <pre>
- *     new ComponentBuilder("Hello ").color(ChatColor.RED).
- *         append("World").color(ChatColor.BLUE).
- *         append("!").bold(true).create();
+ * <
+ * pre>
+ * new ComponentBuilder("Hello ").color(ChatColor.RED).
+ * append("World").color(ChatColor.BLUE). append("!").bold(true).create();
  * </pre>
  * <p/>
- * All methods (excluding {@link #append(String)} and {@link #create()}
- * work on the last part appended to the builder, so in the example
- * above "Hello " would be {@link net.md_5.bungee.api.ChatColor#RED}
- * and "World" would be {@link net.md_5.bungee.api.ChatColor#BLUE} but
- * "!" would be bold and {@link net.md_5.bungee.api.ChatColor#BLUE}
- * because append copies the previous part's formatting
+ * All methods (excluding {@link #append(String)} and {@link #create()} work on
+ * the last part appended to the builder, so in the example above "Hello " would
+ * be {@link net.md_5.bungee.api.ChatColor#RED} and "World" would be
+ * {@link net.md_5.bungee.api.ChatColor#BLUE} but "!" would be bold and
+ * {@link net.md_5.bungee.api.ChatColor#BLUE} because append copies the previous
+ * part's formatting
  */
 public class ComponentBuilder
 {
+
     private TextComponent current;
     private List<BaseComponent> parts = new ArrayList<>();
 
     /**
-     * Creates a componentBuilder with the given text as the
-     * first part.
+     * Creates a ComponentBuilder with the given text as the first part.
      *
      * @param text the first text element
      */
@@ -40,9 +40,8 @@ public class ComponentBuilder
     }
 
     /**
-     * Appends the text to the builder and makes it the current
-     * target for formatting. The text will have all the
-     * formatting from the previous part.
+     * Appends the text to the builder and makes it the current target for
+     * formatting. The text will have all the formatting from the previous part.
      *
      * @param text the text to append
      * @return this ComponentBuilder for chaining
@@ -80,7 +79,7 @@ public class ComponentBuilder
     }
 
     /**
-     * Sets whether the current part is italic
+     * Sets whether the current part is italic.
      *
      * @param italic whether this part is italic
      * @return this ComponentBuilder for chaining
@@ -92,7 +91,7 @@ public class ComponentBuilder
     }
 
     /**
-     * Sets whether the current part is underlined
+     * Sets whether the current part is underlined.
      *
      * @param underlined whether this part is underlined
      * @return this ComponentBuilder for chaining
@@ -104,7 +103,7 @@ public class ComponentBuilder
     }
 
     /**
-     * Sets whether the current part is strikethrough
+     * Sets whether the current part is strikethrough.
      *
      * @param strikethrough whether this part is strikethrough
      * @return this ComponentBuilder for chaining
@@ -116,7 +115,7 @@ public class ComponentBuilder
     }
 
     /**
-     * Sets whether the current pat is obfuscated
+     * Sets whether the current part is obfuscated.
      *
      * @param obfuscated whether this part is obfuscated
      * @return this ComponentBuilder for chaining
@@ -129,8 +128,9 @@ public class ComponentBuilder
 
     /**
      * Sets the click event for the current part.
-     * @param clickEvent
-     * @return
+     *
+     * @param clickEvent the click event
+     * @return this ComponentBuilder for chaining
      */
     public ComponentBuilder event(ClickEvent clickEvent)
     {
@@ -138,6 +138,12 @@ public class ComponentBuilder
         return this;
     }
 
+    /**
+     * Sets the hover event for the current part.
+     *
+     * @param hoverEvent the hover event
+     * @return this ComponentBuilder for chaining
+     */
     public ComponentBuilder event(HoverEvent hoverEvent)
     {
         current.setHoverEvent( hoverEvent );
@@ -145,13 +151,14 @@ public class ComponentBuilder
     }
 
     /**
-     * Returns the components needed to display the message
-     * created by this builder
+     * Returns the components needed to display the message created by this
+     * builder.
+     *
      * @return the created components
      */
     public BaseComponent[] create()
     {
         parts.add( current );
-        return parts.toArray( new BaseComponent[parts.size()] );
+        return parts.toArray( new BaseComponent[ parts.size() ] );
     }
 }

@@ -1,11 +1,13 @@
 package net.md_5.bungee;
 
+import com.google.gson.GsonBuilder;
+import net.md_5.bungee.api.ServerPing;
+import net.md_5.bungee.module.ModuleManager;
 import com.google.common.io.ByteStreams;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.chat.ComponentSerializer;
 import net.md_5.bungee.log.BungeeLogger;
-import net.md_5.bungee.reconnect.YamlReconnectHandler;
 import net.md_5.bungee.scheduler.BungeeScheduler;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.Gson;
@@ -26,12 +28,15 @@ import java.net.InetSocketAddress;
 import java.text.MessageFormat;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -90,8 +95,8 @@ public class BungeeCord extends ProxyServer
     /**
      * Localization bundle.
      */
-    public final ResourceBundle bundle = ResourceBundle.getBundle( "messages" );
-    public final MultithreadEventLoopGroup eventLoops = new NioEventLoopGroup( 0, new ThreadFactoryBuilder().setNameFormat( "Netty IO Thread #%1$d" ).build() );
+    public ResourceBundle bundle;
+    public MultithreadEventLoopGroup eventLoops;
     /**
      * locations.yml save thread.
      */
@@ -126,26 +131,23 @@ public class BungeeCord extends ProxyServer
     private ConsoleReader consoleReader;
     @Getter
     private final Logger logger;
-    public final Gson gson = new Gson();
+    public final Gson gson = new GsonBuilder()
+            .registerTypeAdapter( ServerPing.PlayerInfo.class, new PlayerInfoSerializer( 5 ) ).create();
+    public final Gson gsonLegacy = new GsonBuilder()
+            .registerTypeAdapter( ServerPing.PlayerInfo.class, new PlayerInfoSerializer( 4 ) ).create();
     @Getter
     private ConnectionThrottle connectionThrottle;
+    private final ModuleManager moduleManager = new ModuleManager();
 
     
     {
         // TODO: Proper fallback when we interface the manager
         getPluginManager().registerCommand( null, new CommandReload() );
         getPluginManager().registerCommand( null, new CommandEnd() );
-        getPluginManager().registerCommand( null, new CommandList() );
-        getPluginManager().registerCommand( null, new CommandServer() );
         getPluginManager().registerCommand( null, new CommandIP() );
-        getPluginManager().registerCommand( null, new CommandAlert() );
         getPluginManager().registerCommand( null, new CommandBungee() );
         getPluginManager().registerCommand( null, new CommandPerms() );
-        getPluginManager().registerCommand( null, new CommandSend() );
-        getPluginManager().registerCommand( null, new CommandDefault() );
         getPluginManager().registerCommand( null, new CommandGraceful() );
-        getPluginManager().registerCommand( null, new CommandFind() );
-        getPluginManager().registerCommand( null, new CommandAlertRaw() );
 
         registerChannel( "BungeeCord" );
     }
@@ -157,6 +159,14 @@ public class BungeeCord extends ProxyServer
 
     public BungeeCord() throws IOException
     {
+        try
+        {
+            bundle = ResourceBundle.getBundle( "messages" );
+        } catch ( MissingResourceException ex )
+        {
+            bundle = ResourceBundle.getBundle( "messages", Locale.ENGLISH );
+        }
+
         Log.setOutput( new PrintStream( ByteStreams.nullOutputStream() ) ); // TODO: Bug JLine
         AnsiConsole.systemInstall();
         consoleReader = new ConsoleReader();
@@ -172,12 +182,12 @@ public class BungeeCord extends ProxyServer
             logger.info( "NOTE: This error is non crucial, and BungeeCord will still function correctly! Do not bug the author about it unless you are still unable to get it working" );
         }
 
-        if ( !NativeCipher.load() )
+        if ( NativeCipher.load() )
         {
-            logger.warning( "NOTE: Failed to load native code. Falling back to Java cipher." );
+            logger.info( "Using OpenSSL based native cipher." );
         } else
         {
-            logger.info( "Native code loaded." );
+            logger.info( "Using standard Java JCE cipher. To enable the OpenSSL based native cipher, please make sure you are using 64 bit Ubuntu or Debian with libssl installed." );
         }
     }
 
@@ -190,22 +200,25 @@ public class BungeeCord extends ProxyServer
     @Override
     public void start() throws Exception
     {
+        System.setProperty( "java.net.preferIPv4Stack", "true" ); // Minecraft does not support IPv6
+        System.setProperty( "io.netty.selectorAutoRebuildThreshold", "0" ); // Seems to cause Bungee to stop accepting connections
         ResourceLeakDetector.setEnabled( false ); // Eats performance
+
+        eventLoops = new NioEventLoopGroup( 0, new ThreadFactoryBuilder().setNameFormat( "Netty IO Thread #%1$d" ).build() );
+
+        File moduleDirectory = new File( "modules" );
+        moduleManager.load( this, moduleDirectory );
+        pluginManager.detectPlugins( moduleDirectory );
 
         pluginsFolder.mkdir();
         pluginManager.detectPlugins( pluginsFolder );
+
+        pluginManager.loadPlugins();
         config.load();
-        for ( ListenerInfo info : config.getListeners() )
-        {
-            if ( !info.isForceDefault() && reconnectHandler == null )
-            {
-                reconnectHandler = new YamlReconnectHandler();
-                break;
-            }
-        }
+
         isRunning = true;
 
-        pluginManager.loadAndEnablePlugins();
+        pluginManager.enablePlugins();
 
         connectionThrottle = new ConnectionThrottle( config.getThrottle() );
         startListeners();
@@ -407,7 +420,7 @@ public class BungeeCord extends ProxyServer
         connectionLock.readLock().lock();
         try
         {
-            return (Collection) new HashSet<>( connections.values() );
+            return Collections.unmodifiableCollection( new HashSet( connections.values() ) );
         } finally
         {
             connectionLock.readLock().unlock();
@@ -474,13 +487,13 @@ public class BungeeCord extends ProxyServer
     @Override
     public int getProtocolVersion()
     {
-        return Protocol.PROTOCOL_VERSION;
+        return Protocol.supportedVersions.get( Protocol.supportedVersions.size() - 1 );
     }
 
     @Override
     public String getGameVersion()
     {
-        return Protocol.MINECRAFT_VERSION;
+        return "1.7.4";
     }
 
     @Override

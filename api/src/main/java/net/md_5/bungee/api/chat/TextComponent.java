@@ -7,6 +7,7 @@ import lombok.Setter;
 import net.md_5.bungee.api.ChatColor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,8 +21,10 @@ public class TextComponent extends BaseComponent
     private static final Pattern url = Pattern.compile( "^(?:(https?)://)?([-\\w_\\.]{2,}\\.[a-z]{2,4})(/\\S*)?$" );
 
     /**
-     * Converts the old formatting system that used {@link net.md_5.bungee.api.ChatColor#COLOR_CHAR}
-     * into the new json based system.
+     * Converts the old formatting system that used
+     * {@link net.md_5.bungee.api.ChatColor#COLOR_CHAR} into the new json based
+     * system.
+     *
      * @param message the text to convert
      * @return the components needed to print the message to the client
      */
@@ -43,6 +46,8 @@ public class TextComponent extends BaseComponent
                 {
                     c += 32;
                 }
+                ChatColor format = ChatColor.getByChar( c );
+                if ( format == null ) continue;
                 if ( builder.length() > 0 )
                 {
                     TextComponent old = component;
@@ -51,7 +56,6 @@ public class TextComponent extends BaseComponent
                     builder = new StringBuilder();
                     components.add( old );
                 }
-                ChatColor format = ChatColor.getByChar( c );
                 switch ( format )
                 {
                     case BOLD:
@@ -79,7 +83,10 @@ public class TextComponent extends BaseComponent
                 continue;
             }
             int pos = message.indexOf( ' ', i );
-            if ( pos == -1 ) pos = message.length();
+            if ( pos == -1 )
+            {
+                pos = message.length();
+            }
             if ( matcher.region( i, pos ).find() )
             { //Web link handling
 
@@ -110,24 +117,42 @@ public class TextComponent extends BaseComponent
             component.setText( builder.toString() );
             components.add( component );
         }
-        return components.toArray( new BaseComponent[components.size()] );
+
+        //The client will crash if the array is empty
+        if ( components.size() == 0 )
+        {
+            components.add( new TextComponent( "" ) );
+        }
+
+        return components.toArray( new BaseComponent[ components.size() ] );
     }
 
     /**
-     * The text of the component that will be
-     * displayed to the client
+     * The text of the component that will be displayed to the client
      */
     private String text;
 
     /**
-     * Creates a TextComponent with formatting and text
-     * from the passed component
+     * Creates a TextComponent with formatting and text from the passed
+     * component
+     *
      * @param textComponent the component to copy from
      */
     public TextComponent(TextComponent textComponent)
     {
         super( textComponent );
         setText( textComponent.getText() );
+    }
+
+    /**
+     * Creates a TextComponent with blank text and the extras set
+     * to the passed array
+     *
+     * @param extras the extras to set
+     */
+    public TextComponent(BaseComponent ...extras) {
+        setText( "" );
+        setExtra( Arrays.asList(extras) );
     }
 
     @Override
@@ -141,11 +166,26 @@ public class TextComponent extends BaseComponent
     protected void toLegacyText(StringBuilder builder)
     {
         builder.append( getColor() );
-        if ( isBold() ) builder.append( ChatColor.BOLD );
-        if ( isItalic() ) builder.append( ChatColor.ITALIC );
-        if ( isUnderlined() ) builder.append( ChatColor.UNDERLINE );
-        if ( isStrikethrough() ) builder.append( ChatColor.STRIKETHROUGH );
-        if ( isObfuscated() ) builder.append( ChatColor.MAGIC );
+        if ( isBold() )
+        {
+            builder.append( ChatColor.BOLD );
+        }
+        if ( isItalic() )
+        {
+            builder.append( ChatColor.ITALIC );
+        }
+        if ( isUnderlined() )
+        {
+            builder.append( ChatColor.UNDERLINE );
+        }
+        if ( isStrikethrough() )
+        {
+            builder.append( ChatColor.STRIKETHROUGH );
+        }
+        if ( isObfuscated() )
+        {
+            builder.append( ChatColor.MAGIC );
+        }
         builder.append( text );
         super.toLegacyText( builder );
     }

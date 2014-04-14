@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.config.ListenerInfo;
@@ -51,7 +52,8 @@ public class QueryHandler extends SimpleChannelInboundHandler<DatagramPacket>
         ByteBuf in = msg.content();
         if ( in.readUnsignedByte() != 0xFE || in.readUnsignedByte() != 0xFD )
         {
-            throw new IllegalStateException( "Incorrect magic!" );
+            bungee.getLogger().log( Level.WARNING, "Query - Incorrect magic!: {0}", msg.sender() );
+            return;
         }
 
         ByteBuf out = ctx.alloc().buffer();
@@ -96,7 +98,10 @@ public class QueryHandler extends SimpleChannelInboundHandler<DatagramPacket>
             } else if ( in.readableBytes() == 4 )
             {
                 // Long Response
-                out.writeBytes( new byte[ 11 ] );
+                out.writeBytes( new byte[]
+                {
+                    0x73, 0x70, 0x6C, 0x69, 0x74, 0x6E, 0x75, 0x6D, 0x00, (byte) 0x80, 0x00
+                } );
                 Map<String, String> data = new LinkedHashMap<>();
 
                 data.put( "hostname", listener.getMotd() );

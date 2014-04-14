@@ -43,13 +43,22 @@ public class DownstreamBridge extends PacketHandler
     private final ServerConnection server;
 
     @Override
-    public void connected( ChannelWrapper channel ) throws Exception {
+    public void connected( ChannelWrapper channel ) throws Exception
+    {
         if( ! con.isActive() )
             server.disconnect( "End of Stream" );
-        con.sendMessage( ChatColor.GREEN + "Welcome to " + ChatColor.RED + server.getInfo().getName() );
+        else
+            con.sendMessage( ChatColor.GREEN + "Welcome to " + ChatColor.RED + server.getInfo().getName() );
     }
     
-    public void tryRescue( String kickMessage ) {
+    public void tryRescue( String kickMessage )
+    {
+        if ( server.isObsolete() )
+        {
+            // do not perform any actions if the user has already moved
+            return;
+        }
+
         ServerInfo def = bungee.getServerInfo( con.getPendingConnection().getListener().getFallbackServer() );
         if ( ! server.getInfo().getName().equalsIgnoreCase( BungeeCord.jailServerName ) )
         {
@@ -92,7 +101,7 @@ public class DownstreamBridge extends PacketHandler
     {
         if ( !server.isObsolete() )
         {
-            EntityMap.rewriteClientbound( packet.buf, con.getServerEntityId(), con.getClientEntityId() );
+            con.getEntityRewrite().rewriteClientbound( packet.buf, con.getServerEntityId(), con.getClientEntityId() );
             con.sendPacket( packet );
         }
     }
@@ -110,7 +119,7 @@ public class DownstreamBridge extends PacketHandler
 
         if ( !con.getTabList().onListUpdate( playerList.getUsername(), playerList.isOnline(), playerList.getPing() ) )
         {
-            throw new CancelSendSignal();
+            throw CancelSendSignal.INSTANCE;
         }
     }
 
@@ -209,7 +218,7 @@ public class DownstreamBridge extends PacketHandler
 
         if ( bungee.getPluginManager().callEvent( event ).isCancelled() )
         {
-            throw new CancelSendSignal();
+            throw CancelSendSignal.INSTANCE;
         }
 
         if ( pluginMessage.getTag().equals( "BungeeCord" ) )
@@ -338,7 +347,7 @@ public class DownstreamBridge extends PacketHandler
                 out.writeUTF( "UUID" );
                 out.writeUTF( con.getUUID() );
             }
-            if ( subChannel.equals("UUIDOther") )
+            if ( subChannel.equals( "UUIDOther" ) )
             {
                 ProxiedPlayer player = bungee.getPlayer( in.readUTF() );
                 if ( player != null )
@@ -370,10 +379,13 @@ public class DownstreamBridge extends PacketHandler
         {
             def = null;
         }*/
-        ServerKickEvent origEvt = new ServerKickEvent( con, ComponentSerializer.parse(kick.getMessage()), def, ServerKickEvent.State.CONNECTED );
-        
+        ServerKickEvent origEvt = new ServerKickEvent( con, ComponentSerializer.parse( kick.getMessage() ), def, ServerKickEvent.State.CONNECTED );
+
         if( ! server.getInfo().getName().equalsIgnoreCase( BungeeCord.jailServerName ) && ( kick.getMessage().contains( "Server" ) || kick.getMessage().contains( "closed" ) || kick.getMessage().contains( "white-listed" ) ) )
+        {
             origEvt.setCancelled( true );
+        }
+
         ServerKickEvent event = bungee.getPluginManager().callEvent( origEvt );
         if ( event.isCancelled() && event.getCancelServer() != null )
         {
@@ -384,7 +396,7 @@ public class DownstreamBridge extends PacketHandler
             con.disconnect0( event.getKickReasonComponent() ); // TODO: Prefix our own stuff.
             server.setObsolete( true ); // TODO: Is this still needed?
         }
-        throw new CancelSendSignal();
+        throw CancelSendSignal.INSTANCE;
     }
 
     @Override
