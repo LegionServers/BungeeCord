@@ -1,5 +1,6 @@
 package net.md_5.bungee.connection;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
@@ -13,8 +14,11 @@ import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 import javax.crypto.SecretKey;
+
+import com.google.gson.Gson;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.*;
@@ -40,7 +44,6 @@ import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.netty.cipher.CipherDecoder;
 import net.md_5.bungee.netty.cipher.CipherEncoder;
 import net.md_5.bungee.protocol.DefinedPacket;
-import net.md_5.bungee.protocol.packet.Login;
 import net.md_5.bungee.protocol.packet.Handshake;
 import net.md_5.bungee.protocol.packet.PluginMessage;
 import net.md_5.bungee.protocol.packet.EncryptionResponse;
@@ -50,6 +53,7 @@ import net.md_5.bungee.api.AbstractReconnectHandler;
 import net.md_5.bungee.api.event.PlayerHandshakeEvent;
 import net.md_5.bungee.api.event.PreLoginEvent;
 import net.md_5.bungee.protocol.Protocol;
+import net.md_5.bungee.protocol.packet.LegacyHandshake;
 import net.md_5.bungee.protocol.packet.LegacyPing;
 import net.md_5.bungee.protocol.packet.LoginRequest;
 import net.md_5.bungee.protocol.packet.LoginSuccess;
@@ -66,18 +70,13 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Getter
     private final ListenerInfo listener;
     @Getter
-    private Login forgeLogin;
-    @Getter
     private Handshake handshake;
     @Getter
     private LoginRequest loginRequest;
     private EncryptionRequest request;
     @Getter
-    private List<PluginMessage> loginMessages = new ArrayList<>();
-    @Getter
-    private List<PluginMessage> registerMessages = new ArrayList<>();
+    private final List<PluginMessage> registerMessages = new ArrayList<>();
     private State thisState = State.HANDSHAKE;
-    private SecretKey sharedKey;
     private final Unsafe unsafe = new Unsafe()
     {
         @Override
@@ -88,11 +87,16 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     };
     @Getter
     private boolean onlineMode = BungeeCord.getInstance().config.isOnlineMode();
-    private InetSocketAddress vHost;
     private byte version = -1;
     private InetSocketAddress effectiveAddress = null;
     @Getter
-    private String UUID;
+    private InetSocketAddress virtualHost;
+    @Getter
+    private UUID uniqueId;
+    @Getter
+    private UUID offlineId;
+    @Getter
+    private LoginResult loginProfile;
 
     private enum State
     {
@@ -118,11 +122,16 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         // TODO: Unregister?
         if ( pluginMessage.getTag().equals( "REGISTER" ) )
         {
+            Preconditions.checkState( registerMessages.size() < 128, "Too many channels registered" );
             registerMessages.add( pluginMessage );
-        } else
-        {
-            loginMessages.add( pluginMessage );
         }
+    }
+
+    @Override
+    public void handle(LegacyHandshake legacyHandshake) throws Exception
+    {
+        ch.getHandle().writeAndFlush( bungee.getTranslation( "outdated_client" ) );
+        ch.close();
     }
 
     @Override
@@ -133,7 +142,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         legacy = bungee.getPluginManager().callEvent( new ProxyPingEvent( this, legacy ) ).getResponse();
 
         String kickMessage = ChatColor.DARK_BLUE
-                + "\00" + legacy.getVersion().getProtocol()
+                + "\00" + 127
                 + "\00" + legacy.getVersion().getName()
                 + "\00" + legacy.getDescription()
                 + "\00" + legacy.getPlayers().getOnline()
@@ -164,17 +173,19 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 result = bungee.getPluginManager().callEvent( new ProxyPingEvent( InitialHandler.this, result ) ).getResponse();
 
                 BungeeCord.getInstance().getConnectionThrottle().unthrottle( getAddress().getAddress() );
-                unsafe.sendPacket( new StatusResponse( BungeeCord.getInstance().gson.toJson( result ) ) );
+                Gson gson = handshake.getProtocolVersion() == 4 ? BungeeCord.getInstance().gsonLegacy : BungeeCord.getInstance().gson;
+                unsafe.sendPacket( new StatusResponse( gson.toJson( result ) ) );
             }
         };
 
         if ( forced != null && listener.isPingPassthrough() )
         {
-            forced.ping( pingBack );
+            ((BungeeServerInfo) forced).ping( pingBack, handshake.getProtocolVersion() );
         } else
         {
+            int protocol = ( Protocol.supportedVersions.contains( handshake.getProtocolVersion() ) ) ? handshake.getProtocolVersion() : -1;
             pingBack.done( new ServerPing(
-                    new ServerPing.Protocol( bungee.getGameVersion(), bungee.getProtocolVersion() ),
+                    new ServerPing.Protocol( bungee.getGameVersion(), protocol ),
                     new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ),
                     motd, BungeeCord.getInstance().config.favicon ),
                     null );
@@ -196,9 +207,25 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.HANDSHAKE, "Not expecting HANDSHAKE" );
         this.handshake = handshake;
-        this.vHost = new InetSocketAddress( handshake.getHost(), handshake.getPort() );
-        //if ( ((BungeeCord) bungee).config.getDownstreamProxies().contains( ((InetSocketAddress) ch.getHandle().remoteAddress()).getAddress().getHostAddress() ) )
-        //    effectiveAddress = new InetSocketAddress(srcHost, srcPort);
+        ch.setVersion( handshake.getProtocolVersion() );
+
+        // SRV records can end with a . depending on DNS / client.
+        if ( handshake.getHost().endsWith( "." ) )
+        {
+            handshake.setHost( handshake.getHost().substring( 0, handshake.getHost().length() - 1 ) );
+        }
+
+        if ( ((BungeeCord) bungee).config.getDownstreamProxies().contains( ((InetSocketAddress) ch.getHandle().remoteAddress()).getAddress().getHostAddress() ) )
+        {
+            String[] parts = handshake.getHost().split( "\00" );
+            if ( parts.length == 3 )
+            {
+                handshake.setHost( parts[ 0 ] );
+                effectiveAddress = new InetSocketAddress( parts[ 1 ], Integer.parseInt( parts[ 2 ], 10 ) );
+            }
+        }
+
+        this.virtualHost = new InetSocketAddress( handshake.getHost(), handshake.getPort() );
         bungee.getLogger().log( Level.INFO, "{0} has connected", this );
 
         bungee.getPluginManager().callEvent( new PlayerHandshakeEvent( InitialHandler.this, handshake ) );
@@ -226,19 +253,15 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         Preconditions.checkState( thisState == State.USERNAME, "Not expecting USERNAME" );
         this.loginRequest = loginRequest;
 
-        if ( handshake.getProtocolVersion() > bungee.getProtocolVersion() )
+        if ( !Protocol.supportedVersions.contains( handshake.getProtocolVersion() ) )
         {
             disconnect( bungee.getTranslation( "outdated_server" ) );
-            return;
-        } else if ( handshake.getProtocolVersion() < bungee.getProtocolVersion() )
-        {
-            disconnect( bungee.getTranslation( "outdated_client" ) );
             return;
         }
 
         if ( getName().length() > 16 )
         {
-            disconnect( "Cannot have username longer than 16 characters" );
+            disconnect( bungee.getTranslation( "name_too_long" ) );
             return;
         }
 
@@ -293,7 +316,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.ENCRYPT, "Not expecting ENCRYPT" );
 
-        sharedKey = EncryptionUtil.getSecret( encryptResponse, request );
+        SecretKey sharedKey = EncryptionUtil.getSecret( encryptResponse, request );
         BungeeCipher decrypt = EncryptionUtil.getCipher( false, sharedKey );
         ch.addBefore( PipelineUtils.FRAME_DECODER, PipelineUtils.DECRYPT_HANDLER, new CipherDecoder( decrypt ) );
         BungeeCipher encrypt = EncryptionUtil.getCipher( true, sharedKey );
@@ -323,7 +346,8 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     LoginResult obj = BungeeCord.getInstance().gson.fromJson( result, LoginResult.class );
                     if ( obj != null )
                     {
-                        UUID = obj.getId();
+                        loginProfile = obj;
+                        uniqueId = Util.getUUID( obj.getId() );
                         finish();
                         return;
                     }
@@ -369,11 +393,19 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     {
                         if ( ch.getHandle().isActive() )
                         {
-                            if ( UUID == null )
+                            offlineId = java.util.UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( Charsets.UTF_8 ) );
+                            if ( uniqueId == null )
                             {
-                                UUID = java.util.UUID.randomUUID().toString();
+                                uniqueId = offlineId;
                             }
-                            unsafe.sendPacket( new LoginSuccess( UUID, getName() ) );
+                            // Version 5 == 1.7.6. This is a screwup as 1.7.6 was also a snapshot.
+                            if ( getVersion() == 5 )
+                            {
+                                unsafe.sendPacket( new LoginSuccess( getUniqueId().toString(), getName() ) ); // With dashes in between
+                            } else
+                            {
+                                unsafe.sendPacket( new LoginSuccess( getUUID(), getName() ) ); // Without dashes, for older clients.
+                            }
                             ch.setProtocol( Protocol.GAME );
 
                             UserConnection userCon = new UserConnection( bungee, ch, getName(), InitialHandler.this );
@@ -392,7 +424,12 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                             {
                                 server = AbstractReconnectHandler.getForcedHost( InitialHandler.this );
                             }
-                            userCon.connect( server, true );
+                            if ( server == null )
+                            {
+                                server = bungee.getServerInfo( listener.getDefaultServer() );
+                            }
+
+                            userCon.connect( server, null, true );
 
                             thisState = State.FINISHED;
                         }
@@ -406,9 +443,9 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     }
 
     @Override
-    public synchronized void disconnect(String reason)
+    public void disconnect(String reason)
     {
-        if (!ch.isClosed())
+        if ( !ch.isClosed() )
         {
             unsafe().sendPacket( new Kick( ComponentSerializer.toString( TextComponent.fromLegacyText( reason ) ) ) );
             ch.close();
@@ -428,7 +465,10 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public void disconnect(BaseComponent reason)
     {
-        disconnect( new BaseComponent[]{reason} );
+        disconnect( new BaseComponent[]
+        {
+            reason
+        } );
     }
 
     @Override
@@ -440,13 +480,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public int getVersion()
     {
-        return ( handshake == null ) ? version : handshake.getProtocolVersion();
-    }
-
-    @Override
-    public InetSocketAddress getVirtualHost()
-    {
-        return vHost;
+        return ( handshake == null ) ? -1 : handshake.getProtocolVersion();
     }
 
     @Override
@@ -466,6 +500,12 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.USERNAME, "Can only set online mode status whilst state is username" );
         this.onlineMode = onlineMode;
+    }
+
+    @Override
+    public String getUUID()
+    {
+        return uniqueId.toString().replaceAll( "-", "" );
     }
 
     @Override

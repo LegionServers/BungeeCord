@@ -16,11 +16,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.logging.Level;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import net.md_5.bungee.api.Callback;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -69,8 +71,6 @@ public final class UserConnection implements ProxiedPlayer
     @Setter
     private boolean dimensionChange = true;
     @Getter
-    private final Object switchMutex = new Object();
-    @Getter
     private final Collection<ServerInfo> pendingConnects = new HashSet<>();
     /*========================================================================*/
     @Getter
@@ -106,6 +106,8 @@ public final class UserConnection implements ProxiedPlayer
     @Getter
     private String displayName;
     private InetSocketAddress effectiveAddress = null;
+    @Getter
+    private EntityMap entityRewrite;
     /*========================================================================*/
     private final Unsafe unsafe = new Unsafe()
     {
@@ -118,6 +120,8 @@ public final class UserConnection implements ProxiedPlayer
 
     public void init()
     {
+        this.entityRewrite = new EntityMap( getPendingConnection().getVersion() );
+
         this.displayName = name;
         try
         {
@@ -166,7 +170,13 @@ public final class UserConnection implements ProxiedPlayer
     @Override
     public void connect(ServerInfo target)
     {
-        connect( target, false );
+        connect( target, null );
+    }
+
+    @Override
+    public void connect(ServerInfo target, Callback<Boolean> callback)
+    {
+        connect( target, callback, false );
     }
 
     void sendDimensionSwitch()
@@ -179,17 +189,22 @@ public final class UserConnection implements ProxiedPlayer
     public void connectNow(ServerInfo target)
     {
         sendDimensionSwitch();
-        connect( target, true );
+        connect( target, null, true );
     }
 
-    public void connect(ServerInfo info, final boolean retry)
+    public void connect(ServerInfo info, final Callback<Boolean> callback, final boolean retry)
     {
-        connect(info, retry, 0);
+        connect(info, callback, retry, 0);
     }
     
-    public void connect(ServerInfo info, final boolean retry, final int retryCount)
+    public void connect(ServerInfo info, final Callback<Boolean> callback, final boolean retry, final int retryCount)
     {
         Preconditions.checkNotNull( info, "info" );
+
+        if ( !isActive() )
+        {
+            return;
+        }
 
         ServerConnectEvent event = new ServerConnectEvent( this, info );
         if ( bungee.getPluginManager().callEvent( event ).isCancelled() )
@@ -218,8 +233,8 @@ public final class UserConnection implements ProxiedPlayer
             protected void initChannel(Channel ch) throws Exception
             {
                 PipelineUtils.BASE.initChannel( ch );
-                ch.pipeline().addAfter( PipelineUtils.FRAME_DECODER, PipelineUtils.PACKET_DECODER, new MinecraftDecoder( Protocol.HANDSHAKE, false ) );
-                ch.pipeline().addAfter( PipelineUtils.FRAME_PREPENDER, PipelineUtils.PACKET_ENCODER, new MinecraftEncoder( Protocol.HANDSHAKE, false ) );
+                ch.pipeline().addAfter( PipelineUtils.FRAME_DECODER, PipelineUtils.PACKET_DECODER, new MinecraftDecoder( Protocol.HANDSHAKE, false, getPendingConnection().getVersion() ) );
+                ch.pipeline().addAfter( PipelineUtils.FRAME_PREPENDER, PipelineUtils.PACKET_ENCODER, new MinecraftEncoder( Protocol.HANDSHAKE, false, getPendingConnection().getVersion() ) );
                 ch.pipeline().get( HandlerBoss.class ).setHandler( new ServerConnector( bungee, UserConnection.this, target ) );
             }
         };
@@ -228,6 +243,11 @@ public final class UserConnection implements ProxiedPlayer
             @Override
             public void operationComplete(ChannelFuture future) throws Exception
             {
+                if ( callback != null )
+                {
+                    callback.done( future.isSuccess(), future.cause() );
+                }
+
                 if ( !future.isSuccess() )
                 {
                     future.channel().close();
@@ -237,13 +257,13 @@ public final class UserConnection implements ProxiedPlayer
                     if ( retry && target != def && ( getServer() == null || def != getServer().getInfo() ) && isActive() )
                     {
                         sendMessage( bungee.getTranslation( "fallback_lobby" ) );
-                        connect( def, false );
+                        connect( def, null, false );
                     } else if ( target == def && retry && retryCount <= 12 && isActive() )
                     {
                         ch.getHandle().eventLoop().schedule( new Runnable() {
                             @Override
                             public void run() {
-                                connect( def, true, retryCount + 1 );
+                                connect( def, null, true, retryCount + 1 );
                             }
                         }, 5, TimeUnit.SECONDS );
                     } else
@@ -261,7 +281,7 @@ public final class UserConnection implements ProxiedPlayer
         };
         Bootstrap b = new Bootstrap()
                 .channel( NioSocketChannel.class )
-                .group( BungeeCord.getInstance().eventLoops )
+                .group( ch.getHandle().eventLoop() )
                 .handler( initializer )
                 .option( ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000 ) // TODO: Configurable
                 .remoteAddress( target.getAddress() );
@@ -274,7 +294,7 @@ public final class UserConnection implements ProxiedPlayer
     }
 
     @Override
-    public synchronized void disconnect(String reason)
+    public void disconnect(String reason)
     {
         disconnect0( TextComponent.fromLegacyText( reason ) );
     }
@@ -291,7 +311,7 @@ public final class UserConnection implements ProxiedPlayer
         disconnect0( reason );
     }
 
-    public synchronized void disconnect0(BaseComponent ...reason)
+    public synchronized void disconnect0(BaseComponent... reason)
     {
         if ( ch.getHandle().isActive() )
         {
@@ -354,9 +374,9 @@ public final class UserConnection implements ProxiedPlayer
     }
     
     public InetSocketAddress getEffectiveAddress() {
-    	if (effectiveAddress == null)
-    		return getAddress();
-    	return effectiveAddress;
+        if (effectiveAddress == null)
+            return getAddress();
+        return effectiveAddress;
     }
     
     public void setEffectiveAddress(InetSocketAddress addr) {
@@ -414,6 +434,12 @@ public final class UserConnection implements ProxiedPlayer
     }
 
     @Override
+    public Collection<String> getPermissions()
+    {
+        return Collections.unmodifiableCollection( permissions );
+    }
+
+    @Override
     public String toString()
     {
         return name;
@@ -429,5 +455,11 @@ public final class UserConnection implements ProxiedPlayer
     public String getUUID()
     {
         return getPendingConnection().getUUID();
+    }
+
+    @Override
+    public UUID getUniqueId()
+    {
+        return getPendingConnection().getUniqueId();
     }
 }

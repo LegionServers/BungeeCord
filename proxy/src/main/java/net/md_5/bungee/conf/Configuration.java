@@ -4,6 +4,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import com.google.common.io.Files;
 import gnu.trove.map.TMap;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -11,6 +14,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
+import javax.imageio.ImageIO;
 import lombok.Getter;
 import net.md_5.bungee.api.ProxyConfig;
 import net.md_5.bungee.api.ProxyServer;
@@ -65,7 +69,27 @@ public class Configuration implements ProxyConfig
         {
             try
             {
-                favicon = "data:image/png;base64," + BaseEncoding.base64().encode( Files.toByteArray( fav ) );
+                BufferedImage image = ImageIO.read( fav );
+                if ( image != null )
+                {
+                    if ( image.getHeight() == 64 && image.getWidth() == 64 )
+                    {
+                        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                        ImageIO.write( image, "png", bytes );
+                        favicon = "data:image/png;base64," + BaseEncoding.base64().encode( bytes.toByteArray() );
+                        if ( favicon.length() > Short.MAX_VALUE )
+                        {
+                            ProxyServer.getInstance().getLogger().log( Level.WARNING, "Favicon file too large for server to process" );
+                            favicon = null;
+                        }
+                    } else
+                    {
+                        ProxyServer.getInstance().getLogger().log( Level.WARNING, "Server icon must be exactly 64x64 pixels" );
+                    }
+                } else
+                {
+                    ProxyServer.getInstance().getLogger().log( Level.WARNING, "Could not load server icon for unknown reason. Please double check its format." );
+                }
             } catch ( IOException ex )
             {
                 ProxyServer.getInstance().getLogger().log( Level.WARNING, "Could not load server icon", ex );
@@ -81,7 +105,7 @@ public class Configuration implements ProxyConfig
         throttle = adapter.getInt( "connection_throttle", throttle );
         ipFoward = adapter.getBoolean( "ip_forward", ipFoward );
 
-        disabledCommands = new CaseInsensitiveSet( (Collection<String>) adapter.getList( "disabled_commands", Arrays.asList( "find" ) ) );
+        disabledCommands = new CaseInsensitiveSet( (Collection<String>) adapter.getList( "disabled_commands", Arrays.asList( "disabledcommandhere" ) ) );
 
         Preconditions.checkArgument( listeners != null && !listeners.isEmpty(), "No listeners defined." );
 
@@ -113,6 +137,13 @@ public class Configuration implements ProxyConfig
         {
             Preconditions.checkArgument( servers.containsKey( listener.getDefaultServer() ), "Default server %s is not defined", listener.getDefaultServer() );
             Preconditions.checkArgument( servers.containsKey( listener.getFallbackServer() ), "Fallback server %s is not defined", listener.getFallbackServer() );
+            for ( String server : listener.getForcedHosts().values() )
+            {
+                if ( !servers.containsKey( server ) )
+                {
+                    ProxyServer.getInstance().getLogger().log( Level.SEVERE, "Forced host server {0} is not defined", server );
+                }
+            }
         }
     }
 }

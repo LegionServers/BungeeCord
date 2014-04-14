@@ -14,7 +14,7 @@
     <version>1.7-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>BungeeCord</name>
+    <name>BungeeCord-Parent</name>
     <description>Parent project for all BungeeCord modules.</description>
     <url>https://github.com/SpigotMC/BungeeCord</url>
     <inceptionYear>2012</inceptionYear>
@@ -41,6 +41,7 @@
         <module>bootstrap</module>
         <module>config</module>
         <module>event</module>
+        <module>module</module>
         <module>protocol</module>
         <module>proxy</module>
         <module>query</module>
@@ -63,7 +64,7 @@
 
     <properties>
         <build.number>unknown</build.number>
-        <netty.version>4.0.12.Final</netty.version>
+        <netty.version>4.0.17.Final</netty.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -77,7 +78,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>14.0.1</version>
+            <version>16.0.1</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -89,7 +90,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.12.2</version>
+            <version>1.12.6</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -99,14 +100,14 @@
             <plugin>
                 <groupId>com.lukegb.mojo</groupId>
                 <artifactId>gitdescribe-maven-plugin</artifactId>
-                <version>1.3</version>
+                <version>1.3</version> <!-- There is 2.0, but it seems broken -->
                 <configuration>
-                    <outputPrefix>git-${project.name}-${project.version}-</outputPrefix>
-                    <outputPostfix>-${build.number}</outputPostfix>
+                    <outputPrefix>git:${project.name}:${project.version}:</outputPrefix>
+                    <outputPostfix>:${build.number}</outputPostfix>
                 </configuration>
                 <executions>
                     <execution>
-                        <phase>compile</phase>
+                        <phase>initialize</phase>
                         <goals>
                             <goal>gitdescribe</goal>
                         </goals>
@@ -122,6 +123,52 @@
                     <target>1.7</target>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok-maven-plugin</artifactId>
+                <version>1.12.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>delombok</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <addOutputDirectory>false</addOutputDirectory>
+                    <sourceDirectory>src/main/java</sourceDirectory>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>lombok-needs-tools-jar</id>
+            <activation>
+                <file>
+                    <exists>${java.home}/../lib/tools.jar</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.projectlombok</groupId>
+                        <artifactId>lombok-maven-plugin</artifactId>
+                        <version>1.12.6.0</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>sun.jdk</groupId>
+                                <artifactId>tools</artifactId>
+                                <version>${java.version}</version>
+                                <scope>system</scope>
+                                <systemPath>${java.home}/../lib/tools.jar</systemPath>
+                            </dependency>
+                        </dependencies>        
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

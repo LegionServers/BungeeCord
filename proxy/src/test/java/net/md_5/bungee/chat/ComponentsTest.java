@@ -11,6 +11,7 @@ import org.junit.Test;
 
 public class ComponentsTest
 {
+
     @Test
     public void testBasicComponent()
     {
@@ -75,8 +76,55 @@ public class ComponentsTest
                 append( "!" ).color( ChatColor.YELLOW ).create();
 
         Assert.assertEquals( "Hello World!", BaseComponent.toPlainText( components ) );
-        Assert.assertEquals( ChatColor.RED + "Hello " + ChatColor.BLUE + ChatColor.BOLD +
-                "World" + ChatColor.YELLOW + ChatColor.BOLD + "!", BaseComponent.toLegacyText( components ) );
+        Assert.assertEquals( ChatColor.RED + "Hello " + ChatColor.BLUE + ChatColor.BOLD
+                + "World" + ChatColor.YELLOW + ChatColor.BOLD + "!", BaseComponent.toLegacyText( components ) );
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testLoopSimple()
+    {
+        TextComponent component = new TextComponent( "Testing" );
+        component.addExtra( component );
+        ComponentSerializer.toString( component );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testLoopComplex()
+    {
+        TextComponent a = new TextComponent( "A" );
+        TextComponent b = new TextComponent( "B" );
+        b.setColor( ChatColor.AQUA );
+        TextComponent c = new TextComponent( "C" );
+        c.setColor( ChatColor.RED );
+        a.addExtra( b );
+        b.addExtra( c );
+        c.addExtra( a );
+        ComponentSerializer.toString( a );
+    }
+
+    @Test
+    public void testRepeated()
+    {
+        TextComponent a = new TextComponent( "A" );
+        TextComponent b = new TextComponent( "B" );
+        b.setColor( ChatColor.AQUA );
+        a.addExtra( b );
+        a.addExtra( b );
+        ComponentSerializer.toString( a );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRepeatedError()
+    {
+        TextComponent a = new TextComponent( "A" );
+        TextComponent b = new TextComponent( "B" );
+        b.setColor( ChatColor.AQUA );
+        TextComponent c = new TextComponent( "C" );
+        c.setColor( ChatColor.RED );
+        a.addExtra( b );
+        a.addExtra( c );
+        c.addExtra( a );
+        a.addExtra( b );
+        ComponentSerializer.toString( a );
+    }
 }

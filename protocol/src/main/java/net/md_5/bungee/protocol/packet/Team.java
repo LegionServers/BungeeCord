@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import net.md_5.bungee.protocol.AbstractPacketHandler;
+import net.md_5.bungee.protocol.Protocol;
 
 @Data
 @NoArgsConstructor
@@ -24,7 +25,6 @@ public class Team extends DefinedPacket
     private String prefix;
     private String suffix;
     private boolean friendlyFire;
-    private short playerCount;
     private String[] players;
 
     /**
@@ -40,7 +40,7 @@ public class Team extends DefinedPacket
     }
 
     @Override
-    public void read(ByteBuf buf)
+    public void read(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
     {
         name = readString( buf );
         mode = buf.readByte();
@@ -53,8 +53,9 @@ public class Team extends DefinedPacket
         }
         if ( mode == 0 || mode == 3 || mode == 4 )
         {
-            players = new String[ buf.readShort() ];
-            for ( int i = 0; i < getPlayers().length; i++ )
+            int len = ( protocolVersion >= 7 ) ? readVarInt( buf ) : buf.readShort();
+            players = new String[ len ];
+            for ( int i = 0; i < len; i++ )
             {
                 players[i] = readString( buf );
             }
@@ -62,7 +63,7 @@ public class Team extends DefinedPacket
     }
 
     @Override
-    public void write(ByteBuf buf)
+    public void write(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
     {
         writeString( name, buf );
         buf.writeByte( mode );
@@ -75,10 +76,16 @@ public class Team extends DefinedPacket
         }
         if ( mode == 0 || mode == 3 || mode == 4 )
         {
-            buf.writeShort( players.length );
-            for ( int i = 0; i < players.length; i++ )
+            if ( protocolVersion >= 7 )
             {
-                writeString( players[i], buf );
+                writeVarInt( players.length, buf );
+            } else
+            {
+                buf.writeShort( players.length );
+            }
+            for ( String player : players )
+            {
+                writeString( player, buf );
             }
         }
     }

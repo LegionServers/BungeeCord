@@ -1,5 +1,6 @@
 package net.md_5.bungee.connection;
 
+import com.google.common.base.Preconditions;
 import net.md_5.bungee.BungeeCord;
 import net.md_5.bungee.EntityMap;
 import net.md_5.bungee.UserConnection;
@@ -8,6 +9,7 @@ import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.event.ChatEvent;
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PluginMessageEvent;
+import net.md_5.bungee.api.event.TabCompleteEvent;
 import net.md_5.bungee.netty.ChannelWrapper;
 import net.md_5.bungee.netty.PacketHandler;
 import net.md_5.bungee.protocol.PacketWrapper;
@@ -68,7 +70,7 @@ public class UpstreamBridge extends PacketHandler
     @Override
     public void handle(PacketWrapper packet) throws Exception
     {
-        EntityMap.rewriteServerbound( packet.buf, con.getClientEntityId(), con.getServerEntityId() );
+        con.getEntityRewrite().rewriteServerbound( packet.buf, con.getClientEntityId(), con.getServerEntityId() );
         if ( con.getServer() != null )
         {
             con.getServer().getCh().write( packet );
@@ -89,6 +91,8 @@ public class UpstreamBridge extends PacketHandler
     @Override
     public void handle(Chat chat) throws Exception
     {
+        Preconditions.checkArgument( chat.getMessage().length() <= 100, "Chat message too long" ); // Mojang limit, check on updates
+
         ChatEvent chatEvent = new ChatEvent( con, con.getServer(), chat.getMessage() );
         if ( !bungee.getPluginManager().callEvent( chatEvent ).isCancelled() )
         {
@@ -98,22 +102,32 @@ public class UpstreamBridge extends PacketHandler
                 con.getServer().unsafe().sendPacket( chat );
             }
         }
-        throw new CancelSendSignal();
+        throw CancelSendSignal.INSTANCE;
     }
 
     @Override
     public void handle(TabCompleteRequest tabComplete) throws Exception
     {
+        List<String> suggestions = new ArrayList<>();
+
         if ( tabComplete.getCursor().startsWith( "/" ) )
         {
-            List<String> results = new ArrayList<>();
-            bungee.getPluginManager().dispatchCommand( con, tabComplete.getCursor().substring( 1 ), results );
+            bungee.getPluginManager().dispatchCommand( con, tabComplete.getCursor().substring( 1 ), suggestions );
+        }
 
-            if ( !results.isEmpty() )
-            {
-                con.unsafe().sendPacket( new TabCompleteResponse( results.toArray( new String[ results.size() ] ) ) );
-                throw new CancelSendSignal();
-            }
+        TabCompleteEvent tabCompleteEvent = new TabCompleteEvent( con, con.getServer(), tabComplete.getCursor(), suggestions );
+        bungee.getPluginManager().callEvent( tabCompleteEvent );
+
+        List<String> results = tabCompleteEvent.getSuggestions();
+        if ( !results.isEmpty() )
+        {
+            con.unsafe().sendPacket( new TabCompleteResponse( results.toArray( new String[ results.size() ] ) ) );
+            throw CancelSendSignal.INSTANCE;
+        }
+
+        if ( tabCompleteEvent.isCancelled() )
+        {
+            throw CancelSendSignal.INSTANCE;
         }
     }
 
@@ -128,18 +142,18 @@ public class UpstreamBridge extends PacketHandler
     {
         if ( pluginMessage.getTag().equals( "BungeeCord" ) )
         {
-            throw new CancelSendSignal();
+            throw CancelSendSignal.INSTANCE;
         }
         // Hack around Forge race conditions
         if ( pluginMessage.getTag().equals( "FML" ) && pluginMessage.getStream().readUnsignedByte() == 1 )
         {
-            throw new CancelSendSignal();
+            throw CancelSendSignal.INSTANCE;
         }
 
         PluginMessageEvent event = new PluginMessageEvent( con, con.getServer(), pluginMessage.getTag(), pluginMessage.getData().clone() );
         if ( bungee.getPluginManager().callEvent( event ).isCancelled() )
         {
-            throw new CancelSendSignal();
+            throw CancelSendSignal.INSTANCE;
         }
 
         // TODO: Unregister as well?

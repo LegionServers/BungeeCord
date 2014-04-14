@@ -1,8 +1,10 @@
 package net.md_5.bungee.connection;
 
+import com.google.gson.Gson;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.BungeeCord;
 import net.md_5.bungee.api.Callback;
+import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.ServerPing;
 import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.netty.ChannelWrapper;
@@ -21,18 +23,19 @@ public class PingHandler extends PacketHandler
 
     private final ServerInfo target;
     private final Callback<ServerPing> callback;
+    private final int protocol;
     private ChannelWrapper channel;
 
     @Override
     public void connected(ChannelWrapper channel) throws Exception
     {
         this.channel = channel;
-        MinecraftEncoder encoder = new MinecraftEncoder( Protocol.HANDSHAKE, false );
+        MinecraftEncoder encoder = new MinecraftEncoder( Protocol.HANDSHAKE, false, protocol );
 
-        channel.getHandle().pipeline().addAfter( PipelineUtils.FRAME_DECODER, PipelineUtils.PACKET_DECODER, new MinecraftDecoder( Protocol.STATUS, false ) );
+        channel.getHandle().pipeline().addAfter( PipelineUtils.FRAME_DECODER, PipelineUtils.PACKET_DECODER, new MinecraftDecoder( Protocol.STATUS, false, ProxyServer.getInstance().getProtocolVersion() ) );
         channel.getHandle().pipeline().addAfter( PipelineUtils.FRAME_PREPENDER, PipelineUtils.PACKET_ENCODER, encoder );
 
-        channel.write( new Handshake( Protocol.PROTOCOL_VERSION, target.getAddress().getHostString(), target.getAddress().getPort(), 1 ) );
+        channel.write( new Handshake( protocol, target.getAddress().getHostString(), target.getAddress().getPort(), 1 ) );
 
         encoder.setProtocol( Protocol.STATUS );
         channel.write( new StatusRequest() );
@@ -47,7 +50,8 @@ public class PingHandler extends PacketHandler
     @Override
     public void handle(StatusResponse statusResponse) throws Exception
     {
-        callback.done( BungeeCord.getInstance().gson.fromJson( statusResponse.getResponse(), ServerPing.class ), null );
+        Gson gson = protocol == 4 ? BungeeCord.getInstance().gsonLegacy : BungeeCord.getInstance().gson;
+        callback.done( gson.fromJson( statusResponse.getResponse(), ServerPing.class ), null );
         channel.close();
     }
 
