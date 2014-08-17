@@ -201,9 +201,14 @@ public final class UserConnection implements ProxiedPlayer
     {
         Preconditions.checkNotNull( info, "info" );
 
-        if ( !isActive() )
+        if ( ch.isClosed() || !ch.getHandle().isActive() )
         {
             return;
+        }
+        
+        if ( BungeeCord.getInstance().getPlayer( name ) == null )
+        {
+        	return;
         }
 
         ServerConnectEvent event = new ServerConnectEvent( this, info );

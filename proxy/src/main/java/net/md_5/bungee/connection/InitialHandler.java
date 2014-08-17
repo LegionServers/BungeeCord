@@ -215,8 +215,10 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             handshake.setHost( handshake.getHost().substring( 0, handshake.getHost().length() - 1 ) );
         }
 
+        bungee.getLogger().log( Level.INFO, ((InetSocketAddress) ch.getHandle().remoteAddress()).getAddress().getHostAddress() );
         if ( ((BungeeCord) bungee).config.getDownstreamProxies().contains( ((InetSocketAddress) ch.getHandle().remoteAddress()).getAddress().getHostAddress() ) )
         {
+        	bungee.getLogger().log( Level.INFO, "{0} connected with parts: " + handshake.getHost().replace( "\00", ";" ), this );
             String[] parts = handshake.getHost().split( "\00" );
             if ( parts.length == 3 )
             {
