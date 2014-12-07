@@ -27,9 +27,12 @@ import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.ProxyServer;
+import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.event.EventBus;
 import net.md_5.bungee.event.EventHandler;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
+import org.yaml.snakeyaml.introspector.PropertyUtils;
 
 /**
  * Class to manage bridging between plugin duties and implementation duties, for
@@ -43,18 +46,26 @@ public class PluginManager
     /*========================================================================*/
     private final ProxyServer proxy;
     /*========================================================================*/
-    private final Yaml yaml = new Yaml();
+    private final Yaml yaml;
     private final EventBus eventBus;
     private final Map<String, Plugin> plugins = new LinkedHashMap<>();
     private final Map<String, Command> commandMap = new HashMap<>();
     private Map<String, PluginDescription> toLoad = new HashMap<>();
-    private Multimap<Plugin, Command> commandsByPlugin = ArrayListMultimap.create();
-    private Multimap<Plugin, Listener> listenersByPlugin = ArrayListMultimap.create();
+    private final Multimap<Plugin, Command> commandsByPlugin = ArrayListMultimap.create();
+    private final Multimap<Plugin, Listener> listenersByPlugin = ArrayListMultimap.create();
 
     @SuppressWarnings("unchecked")
     public PluginManager(ProxyServer proxy)
     {
         this.proxy = proxy;
+
+        // Ignore unknown entries in the plugin descriptions
+        Constructor yamlConstructor = new Constructor();
+        PropertyUtils propertyUtils = yamlConstructor.getPropertyUtils();
+        propertyUtils.setSkipMissingProperties( true );
+        yamlConstructor.setPropertyUtils( propertyUtils );
+        yaml = new Yaml( yamlConstructor );
+
         eventBus = new EventBus( proxy.getLogger() );
     }
 
@@ -81,7 +92,7 @@ public class PluginManager
      */
     public void unregisterCommand(Command command)
     {
-        commandMap.values().remove( command );
+        while ( commandMap.values().remove( command ) );
         commandsByPlugin.values().remove( command );
     }
 
@@ -94,7 +105,8 @@ public class PluginManager
     {
         for ( Iterator<Command> it = commandsByPlugin.get( plugin ).iterator(); it.hasNext(); )
         {
-            commandMap.values().remove( it.next() );
+            Command command = it.next();
+            while ( commandMap.values().remove( command ) );
             it.remove();
         }
     }
@@ -122,7 +134,7 @@ public class PluginManager
         }
 
         String commandName = split[0].toLowerCase();
-        if ( proxy.getDisabledCommands().contains( commandName ) )
+        if ( sender instanceof ProxiedPlayer && proxy.getDisabledCommands().contains( commandName ) )
         {
             return false;
         }
@@ -135,7 +147,10 @@ public class PluginManager
         String permission = command.getPermission();
         if ( permission != null && !permission.isEmpty() && !sender.hasPermission( permission ) )
         {
-            sender.sendMessage( proxy.getTranslation( "no_permission" ) );
+            if ( !( command instanceof TabExecutor ) )
+            {
+                sender.sendMessage( proxy.getTranslation( "no_permission" ) );
+            }
             return true;
         }
 
@@ -189,7 +204,7 @@ public class PluginManager
             PluginDescription plugin = entry.getValue();
             if ( !enablePlugin( pluginStatuses, new Stack<PluginDescription>(), plugin ) )
             {
-                ProxyServer.getInstance().getLogger().warning( "Failed to enable " + entry.getKey() );
+                ProxyServer.getInstance().getLogger().log( Level.WARNING, "Failed to enable {0}", entry.getKey() );
             }
         }
         toLoad.clear();
@@ -245,7 +260,7 @@ public class PluginManager
                         dependencyGraph.append( element.getName() ).append( " -> " );
                     }
                     dependencyGraph.append( plugin.getName() ).append( " -> " ).append( dependName );
-                    ProxyServer.getInstance().getLogger().log( Level.WARNING, "Circular dependency detected: " + dependencyGraph );
+                    ProxyServer.getInstance().getLogger().log( Level.WARNING, "Circular dependency detected: {0}", dependencyGraph );
                     status = false;
                 } else
                 {
@@ -395,8 +410,6 @@ public class PluginManager
 
     /**
      * Unregister all of a Plugin's listener.
-     *
-     * @param plugin
      */
     public void unregisterListeners(Plugin plugin)
     {

@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import net.md_5.bungee.protocol.AbstractPacketHandler;
-import net.md_5.bungee.protocol.Protocol;
+import net.md_5.bungee.protocol.ProtocolConstants;
 
 @Data
 @NoArgsConstructor
@@ -24,13 +24,13 @@ public class Team extends DefinedPacket
     private String displayName;
     private String prefix;
     private String suffix;
-    private boolean friendlyFire;
+    private String nameTagVisibility;
+    private byte color;
+    private byte friendlyFire;
     private String[] players;
 
     /**
      * Packet to destroy a team.
-     *
-     * @param name
      */
     public Team(String name)
     {
@@ -40,7 +40,7 @@ public class Team extends DefinedPacket
     }
 
     @Override
-    public void read(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void read(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         name = readString( buf );
         mode = buf.readByte();
@@ -49,11 +49,16 @@ public class Team extends DefinedPacket
             displayName = readString( buf );
             prefix = readString( buf );
             suffix = readString( buf );
-            friendlyFire = buf.readBoolean();
+            friendlyFire = buf.readByte();
+            if ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
+            {
+                nameTagVisibility = readString( buf );
+                color = buf.readByte();
+            }
         }
         if ( mode == 0 || mode == 3 || mode == 4 )
         {
-            int len = ( protocolVersion >= 7 ) ? readVarInt( buf ) : buf.readShort();
+            int len = ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT ) ? readVarInt( buf ) : buf.readShort();
             players = new String[ len ];
             for ( int i = 0; i < len; i++ )
             {
@@ -63,7 +68,7 @@ public class Team extends DefinedPacket
     }
 
     @Override
-    public void write(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void write(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         writeString( name, buf );
         buf.writeByte( mode );
@@ -72,11 +77,16 @@ public class Team extends DefinedPacket
             writeString( displayName, buf );
             writeString( prefix, buf );
             writeString( suffix, buf );
-            buf.writeBoolean( friendlyFire );
+            buf.writeByte( friendlyFire );
+            if ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
+            {
+                writeString( nameTagVisibility, buf );
+                buf.writeByte( color );
+            }
         }
         if ( mode == 0 || mode == 3 || mode == 4 )
         {
-            if ( protocolVersion >= 7 )
+            if ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
             {
                 writeVarInt( players.length, buf );
             } else

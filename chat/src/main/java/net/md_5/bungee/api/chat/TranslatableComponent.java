@@ -4,16 +4,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import net.md_5.bungee.api.ChatColor;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.ToString;
 
 @Getter
 @Setter
+@ToString
 @NoArgsConstructor
 public class TranslatableComponent extends BaseComponent
 {
@@ -32,9 +33,24 @@ public class TranslatableComponent extends BaseComponent
     private List<BaseComponent> with;
 
     /**
+     * Creates a translatable component from the original to clone it.
+     *
+     * @param original the original for the new translatable component.
+     */
+    public TranslatableComponent(TranslatableComponent original)
+    {
+        super( original );
+        setTranslate( original.getTranslate() );
+        for ( BaseComponent baseComponent : original.getWith() )
+        {
+            with.add( baseComponent.duplicate() );
+        }
+    }
+
+    /**
      * Creates a translatable component with the passed substitutions
      *
-     * @see #setTranslate(String)
+     * @see #translate
      * @see #setWith(java.util.List)
      * @param translate the translation key
      * @param with the {@link java.lang.String}s and
@@ -56,6 +72,17 @@ public class TranslatableComponent extends BaseComponent
             }
         }
         setWith( temp );
+    }
+
+    /**
+     * Creates a duplicate of this TranslatableComponent.
+     *
+     * @return the duplicate of this TranslatableComponent.
+     */
+    @Override
+    public BaseComponent duplicate()
+    {
+        return new TranslatableComponent( this );
     }
 
     /**
@@ -103,12 +130,9 @@ public class TranslatableComponent extends BaseComponent
     @Override
     protected void toPlainText(StringBuilder builder)
     {
-        String trans = locales.getString( translate );
-        if ( trans == null )
+        try
         {
-            builder.append( translate );
-        } else
-        {
+            String trans = locales.getString( translate );
             Matcher matcher = format.matcher( trans );
             int position = 0;
             int i = 0;
@@ -138,20 +162,20 @@ public class TranslatableComponent extends BaseComponent
             {
                 builder.append( trans.substring( position, trans.length() ) );
             }
+        } catch ( MissingResourceException e )
+        {
+            builder.append( translate );
         }
+
         super.toPlainText( builder );
     }
 
     @Override
     protected void toLegacyText(StringBuilder builder)
     {
-        String trans = locales.getString( translate );
-        if ( trans == null )
+        try
         {
-            addFormat( builder );
-            builder.append( translate );
-        } else
-        {
+            String trans = locales.getString( translate );
             Matcher matcher = format.matcher( trans );
             int position = 0;
             int i = 0;
@@ -184,6 +208,10 @@ public class TranslatableComponent extends BaseComponent
                 addFormat( builder );
                 builder.append( trans.substring( position, trans.length() ) );
             }
+        } catch ( MissingResourceException e )
+        {
+            addFormat( builder );
+            builder.append( translate );
         }
         super.toLegacyText( builder );
     }
@@ -211,11 +239,5 @@ public class TranslatableComponent extends BaseComponent
         {
             builder.append( ChatColor.MAGIC );
         }
-    }
-
-    @Override
-    public String toString()
-    {
-        return String.format( "TranslatableComponent{translate=%s, with=%s, %s}", translate, with, super.toString() );
     }
 }

@@ -8,8 +8,10 @@ import net.md_5.bungee.api.ChatColor;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.ToString;
 
 @Setter
+@ToString
 @NoArgsConstructor
 public abstract class BaseComponent
 {
@@ -66,17 +68,31 @@ public abstract class BaseComponent
     @Getter
     private HoverEvent hoverEvent;
 
-    protected BaseComponent(BaseComponent old)
+    BaseComponent(BaseComponent old)
     {
         setColor( old.getColorRaw() );
         setBold( old.isBoldRaw() );
         setItalic( old.isItalicRaw() );
-        setUnderlined( old.isUnderlined() );
+        setUnderlined( old.isUnderlinedRaw() );
         setStrikethrough( old.isStrikethroughRaw() );
         setObfuscated( old.isObfuscatedRaw() );
         setClickEvent( old.getClickEvent() );
         setHoverEvent( old.getHoverEvent() );
+        if ( extra != null )
+        {
+            for ( BaseComponent component : extra )
+            {
+                addExtra( component.duplicate() );
+            }
+        }
     }
+
+    /**
+     * Clones the BaseComponent and returns the clone.
+     *
+     * @return The duplicate of this BaseComponent
+     */
+    public abstract BaseComponent duplicate();
 
     /**
      * Converts the components to a string that uses the old formatting codes
@@ -316,7 +332,7 @@ public abstract class BaseComponent
     /**
      * Returns whether the component has any formatting or events applied to it
      *
-     * @return
+     * @return Whether any formatting or events are applied
      */
     public boolean hasFormatting()
     {
@@ -338,7 +354,7 @@ public abstract class BaseComponent
         return builder.toString();
     }
 
-    protected void toPlainText(StringBuilder builder)
+    void toPlainText(StringBuilder builder)
     {
         if ( extra != null )
         {
@@ -362,7 +378,7 @@ public abstract class BaseComponent
         return builder.toString();
     }
 
-    protected void toLegacyText(StringBuilder builder)
+    void toLegacyText(StringBuilder builder)
     {
         if ( extra != null )
         {
@@ -371,11 +387,5 @@ public abstract class BaseComponent
                 e.toLegacyText( builder );
             }
         }
-    }
-
-    @Override
-    public String toString()
-    {
-        return String.format( "BaseComponent{color=%s, bold=%b, italic=%b, underlined=%b, strikethrough=%b, obfuscated=%b, clickEvent=%s, hoverEvent=%s, extra=%s}", getColor().getName(), isBold(), isItalic(), isUnderlined(), isStrikethrough(), isObfuscated(), getClickEvent(), getHoverEvent(), getExtra() );
     }
 }

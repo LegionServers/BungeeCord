@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import net.md_5.bungee.protocol.AbstractPacketHandler;
-import net.md_5.bungee.protocol.Protocol;
+import net.md_5.bungee.protocol.ProtocolConstants;
 
 @Data
 @NoArgsConstructor
@@ -25,20 +25,20 @@ public class Chat extends DefinedPacket
     }
 
     @Override
-    public void read(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void read(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         message = readString( buf );
-        if ( direction.toString().equals( "TO_CLIENT" ) && protocolVersion >= 7 )
+        if ( direction == ProtocolConstants.Direction.TO_CLIENT && protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
         {
             position = buf.readByte();
         }
     }
 
     @Override
-    public void write(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void write(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         writeString( message, buf );
-        if ( direction.toString().equals( "TO_CLIENT" ) && protocolVersion >= 7 )
+        if ( direction == ProtocolConstants.Direction.TO_CLIENT && protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
         {
             buf.writeByte( position );
         }

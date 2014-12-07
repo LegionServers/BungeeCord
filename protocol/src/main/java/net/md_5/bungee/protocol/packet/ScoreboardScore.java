@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import net.md_5.bungee.protocol.AbstractPacketHandler;
-import net.md_5.bungee.protocol.Protocol;
+import net.md_5.bungee.protocol.ProtocolConstants;
 
 @Data
 @NoArgsConstructor
@@ -25,36 +25,44 @@ public class ScoreboardScore extends DefinedPacket
     private int value;
 
     @Override
-    public void read(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void read(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         itemName = readString( buf );
         action = buf.readByte();
-        if ( action != 1 )
+        if ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
         {
             scoreName = readString( buf );
-            if ( protocolVersion >= 7 )
+            if ( action != 1 )
             {
                 value = readVarInt( buf );
-            } else
+            }
+        } else
+        {
+            if ( action != 1 )
             {
+                scoreName = readString( buf );
                 value = buf.readInt();
             }
         }
     }
 
     @Override
-    public void write(ByteBuf buf, Protocol.ProtocolDirection direction, int protocolVersion)
+    public void write(ByteBuf buf, ProtocolConstants.Direction direction, int protocolVersion)
     {
         writeString( itemName, buf );
         buf.writeByte( action );
-        if ( action != 1 )
+        if ( protocolVersion >= ProtocolConstants.MINECRAFT_SNAPSHOT )
         {
             writeString( scoreName, buf );
-            if ( protocolVersion >= 7 )
+            if ( action != 1 )
             {
                 writeVarInt( value, buf );
-            } else
+            }
+        } else
+        {
+            if ( action != 1 )
             {
+                writeString( scoreName, buf );
                 buf.writeInt( value );
             }
         }

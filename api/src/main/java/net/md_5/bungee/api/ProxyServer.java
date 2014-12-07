@@ -7,6 +7,7 @@ import java.io.File;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Map;
+import java.util.UUID;
 import java.util.logging.Logger;
 import lombok.Getter;
 import net.md_5.bungee.api.config.ConfigurationAdapter;
@@ -14,7 +15,6 @@ import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.api.scheduler.TaskScheduler;
-import net.md_5.bungee.api.tab.CustomTabList;
 
 public abstract class ProxyServer
 {
@@ -78,6 +78,14 @@ public abstract class ProxyServer
      * @return their player instance
      */
     public abstract ProxiedPlayer getPlayer(String name);
+
+    /**
+     * Gets a connected player via their UUID
+     *
+     * @param uuid of the player
+     * @return their player instance
+     */
+    public abstract ProxiedPlayer getPlayer(UUID uuid);
 
     /**
      * Return all servers registered to this proxy, keyed by name. Unlike the
@@ -252,14 +260,6 @@ public abstract class ProxyServer
     public abstract void broadcast(BaseComponent message);
 
     /**
-     * Gets a new instance of this proxies custom tab list.
-     *
-     * @param player the player to generate this list in the context of
-     * @return a new {@link CustomTabList} instance
-     */
-    public abstract CustomTabList customTabList(ProxiedPlayer player);
-
-    /**
      * Gets the commands which are disabled and will not be run on this proxy.
      *
      * @return the set of disabled commands
@@ -272,5 +272,25 @@ public abstract class ProxyServer
      * @return the config.
      */
     public abstract ProxyConfig getConfig();
+
+    /**
+     * Attempts to match any players with the given name, and returns a list of
+     * all possible matches.
+     *
+     * @param name the (partial) name to match
+     * @return list of all possible players, singleton if there is an exact
+     * match
+     */
+    public abstract Collection<ProxiedPlayer> matchPlayer(String name);
+
+    /**
+     * Creates a new empty title configuration. In most cases you will want to
+     * {@link Title#reset()} the current title first so your title won't be
+     * affected by a previous one.
+     *
+     * @return A new empty title configuration.
+     * @see Title
+     */
+    public abstract Title createTitle();
 
 }

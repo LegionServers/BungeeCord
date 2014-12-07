@@ -47,7 +47,7 @@ public class CommandServer extends Command implements TabExecutor
         Map<String, ServerInfo> servers = ProxyServer.getInstance().getServers();
         if ( args.length == 0 )
         {
-            player.sendMessage( ProxyServer.getInstance().getTranslation( "current_server" ) + player.getServer().getInfo().getName() );
+            player.sendMessage( ProxyServer.getInstance().getTranslation( "current_server", player.getServer().getInfo().getName() ) );
             TextComponent serverList = new TextComponent( ProxyServer.getInstance().getTranslation( "server_list" ) );
             serverList.setColor( ChatColor.GOLD );
             boolean first = true;
@@ -56,7 +56,11 @@ public class CommandServer extends Command implements TabExecutor
                 if ( server.canAccess( player ) )
                 {
                     TextComponent serverTextComponent = new TextComponent( first ? server.getName() : ", " + server.getName() );
-                    serverTextComponent.setHoverEvent( new HoverEvent( HoverEvent.Action.SHOW_TEXT, new ComponentBuilder(server.getPlayers().size() + " players").create() ) );
+                    int count = server.getPlayers().size();
+                    serverTextComponent.setHoverEvent( new HoverEvent( HoverEvent.Action.SHOW_TEXT,
+                            new ComponentBuilder( count + ( count == 1 ? " player" : " players" ) + "\n" )
+                            .append( "Click to connect to the server" ).italic( true )
+                            .create() ) );
                     serverTextComponent.setClickEvent( new ClickEvent( ClickEvent.Action.RUN_COMMAND, "/server " + server.getName() ) );
                     serverList.addExtra( serverTextComponent );
                     first = false;
