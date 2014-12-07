@@ -1,33 +1,47 @@
 package net.md_5.bungee.api.chat;
 
-import lombok.NoArgsConstructor;
 import net.md_5.bungee.api.ChatColor;
-
 import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * <p>
  * ComponentBuilder simplifies creating basic messages by allowing the use of a
  * chainable builder.
- * <p/>
- * <
- * pre>
+ * </p>
+ * <pre>
  * new ComponentBuilder("Hello ").color(ChatColor.RED).
  * append("World").color(ChatColor.BLUE). append("!").bold(true).create();
  * </pre>
- * <p/>
+ * <p>
  * All methods (excluding {@link #append(String)} and {@link #create()} work on
  * the last part appended to the builder, so in the example above "Hello " would
  * be {@link net.md_5.bungee.api.ChatColor#RED} and "World" would be
  * {@link net.md_5.bungee.api.ChatColor#BLUE} but "!" would be bold and
  * {@link net.md_5.bungee.api.ChatColor#BLUE} because append copies the previous
  * part's formatting
+ * </p>
  */
 public class ComponentBuilder
 {
 
     private TextComponent current;
-    private List<BaseComponent> parts = new ArrayList<>();
+    private final List<BaseComponent> parts = new ArrayList<>();
+
+    /**
+     * Creates a ComponentBuilder from the other given ComponentBuilder to clone
+     * it.
+     *
+     * @param original the original for the new ComponentBuilder.
+     */
+    public ComponentBuilder(ComponentBuilder original)
+    {
+        current = new TextComponent( original.current );
+        for ( BaseComponent baseComponent : original.parts )
+        {
+            parts.add( baseComponent.duplicate() );
+        }
+    }
 
     /**
      * Creates a ComponentBuilder with the given text as the first part.

@@ -5,13 +5,28 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.ServerChannel;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollDatagramChannel;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
+import io.netty.channel.epoll.EpollSocketChannel;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.util.AttributeKey;
+import io.netty.util.internal.PlatformDependent;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import net.md_5.bungee.BungeeCord;
 import net.md_5.bungee.BungeeServerInfo;
 import net.md_5.bungee.UserConnection;
+import net.md_5.bungee.Util;
 import net.md_5.bungee.connection.InitialHandler;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.config.ListenerInfo;
@@ -51,16 +66,54 @@ public class PipelineUtils
     };
     public static final Base BASE = new Base();
     private static final Varint21LengthFieldPrepender framePrepender = new Varint21LengthFieldPrepender();
-    public static String TIMEOUT_HANDLER = "timeout";
-    public static String PACKET_DECODER = "packet-decoder";
-    public static String PACKET_ENCODER = "packet-encoder";
-    public static String BOSS_HANDLER = "inbound-boss";
-    public static String ENCRYPT_HANDLER = "encrypt";
-    public static String DECRYPT_HANDLER = "decrypt";
-    public static String FRAME_DECODER = "frame-decoder";
-    public static String FRAME_PREPENDER = "frame-prepender";
-    public static String LEGACY_DECODER = "legacy-decoder";
-    public static String LEGACY_KICKER = "legacy-kick";
+    public static final String TIMEOUT_HANDLER = "timeout";
+    public static final String PACKET_DECODER = "packet-decoder";
+    public static final String PACKET_ENCODER = "packet-encoder";
+    public static final String BOSS_HANDLER = "inbound-boss";
+    public static final String ENCRYPT_HANDLER = "encrypt";
+    public static final String DECRYPT_HANDLER = "decrypt";
+    public static final String FRAME_DECODER = "frame-decoder";
+    public static final String FRAME_PREPENDER = "frame-prepender";
+    public static final String LEGACY_DECODER = "legacy-decoder";
+    public static final String LEGACY_KICKER = "legacy-kick";
+
+    private static boolean epoll;
+
+    static
+    {
+        if ( !PlatformDependent.isWindows() && Boolean.parseBoolean( System.getProperty( "bungee.epoll", "false" ) ) )
+        {
+            ProxyServer.getInstance().getLogger().info( "Not on Windows, attempting to use enhanced EpollEventLoop" );
+
+            if ( epoll = Epoll.isAvailable() )
+            {
+                ProxyServer.getInstance().getLogger().info( "Epoll is working, utilising it!" );
+            } else
+            {
+                ProxyServer.getInstance().getLogger().log( Level.WARNING, "Epoll is not working, falling back to NIO: {0}", Util.exception( Epoll.unavailabilityCause() ) );
+            }
+        }
+    }
+
+    public static EventLoopGroup newEventLoopGroup(int threads, ThreadFactory factory)
+    {
+        return epoll ? new EpollEventLoopGroup( threads, factory ) : new NioEventLoopGroup( threads, factory );
+    }
+
+    public static Class<? extends ServerChannel> getServerChannel()
+    {
+        return epoll ? EpollServerSocketChannel.class : NioServerSocketChannel.class;
+    }
+
+    public static Class<? extends Channel> getChannel()
+    {
+        return epoll ? EpollSocketChannel.class : NioSocketChannel.class;
+    }
+
+    public static Class<? extends Channel> getDatagramChannel()
+    {
+        return epoll ? EpollDatagramChannel.class : NioDatagramChannel.class;
+    }
 
     public final static class Base extends ChannelInitializer<Channel>
     {

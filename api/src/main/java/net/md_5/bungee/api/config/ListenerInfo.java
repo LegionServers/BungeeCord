@@ -3,7 +3,6 @@ package net.md_5.bungee.api.config;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import lombok.Data;
-import net.md_5.bungee.api.tab.TabListHandler;
 
 /**
  * Class representing the configuration of a server listener. Used for allowing
@@ -49,9 +48,9 @@ public class ListenerInfo
      */
     private final Map<String, String> forcedHosts;
     /**
-     * Class used to build tab lists for this player.
+     * The type of tab list to use
      */
-    private final Class<? extends TabListHandler> tabList;
+    private final String tabListType;
     /**
      * Whether to set the local address when connecting to servers.
      */

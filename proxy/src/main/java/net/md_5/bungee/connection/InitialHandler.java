@@ -19,11 +19,13 @@ import java.util.logging.Level;
 import javax.crypto.SecretKey;
 
 import com.google.gson.Gson;
+import java.util.concurrent.TimeUnit;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.*;
 import net.md_5.bungee.api.Callback;
 import net.md_5.bungee.api.ChatColor;
+import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.ServerPing;
 import net.md_5.bungee.api.chat.BaseComponent;
@@ -53,6 +55,7 @@ import net.md_5.bungee.api.AbstractReconnectHandler;
 import net.md_5.bungee.api.event.PlayerHandshakeEvent;
 import net.md_5.bungee.api.event.PreLoginEvent;
 import net.md_5.bungee.protocol.Protocol;
+import net.md_5.bungee.protocol.ProtocolConstants;
 import net.md_5.bungee.protocol.packet.LegacyHandshake;
 import net.md_5.bungee.protocol.packet.LegacyPing;
 import net.md_5.bungee.protocol.packet.LoginRequest;
@@ -97,6 +100,8 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     private UUID offlineId;
     @Getter
     private LoginResult loginProfile;
+    @Getter
+    private boolean legacy;
 
     private enum State
     {
@@ -130,6 +135,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public void handle(LegacyHandshake legacyHandshake) throws Exception
     {
+        this.legacy = true;
         ch.getHandle().writeAndFlush( bungee.getTranslation( "outdated_client" ) );
         ch.close();
     }
@@ -137,19 +143,53 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public void handle(LegacyPing ping) throws Exception
     {
-        ServerPing legacy = new ServerPing( new ServerPing.Protocol( bungee.getGameVersion(), bungee.getProtocolVersion() ),
-                new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ), listener.getMotd(), null );
-        legacy = bungee.getPluginManager().callEvent( new ProxyPingEvent( this, legacy ) ).getResponse();
+        this.legacy = true;
+        final boolean v1_5 = ping.isV1_5();
 
-        String kickMessage = ChatColor.DARK_BLUE
-                + "\00" + 127
-                + "\00" + legacy.getVersion().getName()
-                + "\00" + legacy.getDescription()
-                + "\00" + legacy.getPlayers().getOnline()
-                + "\00" + legacy.getPlayers().getMax();
+        ServerPing legacy = new ServerPing( new ServerPing.Protocol( bungee.getName() + " " + bungee.getGameVersion(), bungee.getProtocolVersion() ),
+                new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ), listener.getMotd(), (Favicon) null );
 
-        ch.getHandle().writeAndFlush( kickMessage );
-        ch.close();
+        Callback<ProxyPingEvent> callback = new Callback<ProxyPingEvent>()
+        {
+            @Override
+            public void done(ProxyPingEvent result, Throwable error)
+            {
+                if ( ch.isClosed() )
+                {
+                    return;
+                }
+
+                ServerPing legacy = result.getResponse();
+                String kickMessage;
+
+                if ( v1_5 )
+                {
+                    kickMessage = ChatColor.DARK_BLUE
+                            + "\00" + 127
+                            + '\00' + legacy.getVersion().getName()
+                            + '\00' + getFirstLine( legacy.getDescription() )
+                            + '\00' + legacy.getPlayers().getOnline()
+                            + '\00' + legacy.getPlayers().getMax();
+                } else
+                {
+                    // Clients <= 1.3 don't support colored motds because the color char is used as delimiter
+                    kickMessage = ChatColor.stripColor( getFirstLine( legacy.getDescription() ) )
+                            + '\u00a7' + legacy.getPlayers().getOnline()
+                            + '\u00a7' + legacy.getPlayers().getMax();
+                }
+
+                ch.getHandle().writeAndFlush( kickMessage );
+                ch.close();
+            }
+        };
+
+        bungee.getPluginManager().callEvent( new ProxyPingEvent( this, legacy, callback ) );
+    }
+
+    private static String getFirstLine(String str)
+    {
+        int pos = str.indexOf( '\n' );
+        return pos == -1 ? str : str.substring( 0, pos );
     }
 
     @Override
@@ -168,26 +208,35 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 if ( error != null )
                 {
                     result = new ServerPing();
-                    result.setDescription( "Error pinging remote server: " + Util.exception( error ) );
+                    result.setDescription( bungee.getTranslation( "ping_cannot_connect" ) );
+                    bungee.getLogger().log( Level.WARNING, "Error pinging remote server", error );
                 }
-                result = bungee.getPluginManager().callEvent( new ProxyPingEvent( InitialHandler.this, result ) ).getResponse();
 
-                BungeeCord.getInstance().getConnectionThrottle().unthrottle( getAddress().getAddress() );
-                Gson gson = handshake.getProtocolVersion() == 4 ? BungeeCord.getInstance().gsonLegacy : BungeeCord.getInstance().gson;
-                unsafe.sendPacket( new StatusResponse( gson.toJson( result ) ) );
+                Callback<ProxyPingEvent> callback = new Callback<ProxyPingEvent>()
+                {
+                    @Override
+                    public void done(ProxyPingEvent pingResult, Throwable error)
+                    {
+                        BungeeCord.getInstance().getConnectionThrottle().unthrottle( getAddress().getAddress() );
+                        Gson gson = handshake.getProtocolVersion() == ProtocolConstants.MINECRAFT_1_7_2 ? BungeeCord.getInstance().gsonLegacy : BungeeCord.getInstance().gson;
+                        unsafe.sendPacket( new StatusResponse( gson.toJson( pingResult.getResponse() ) ) );
+                    }
+                };
+
+                bungee.getPluginManager().callEvent( new ProxyPingEvent( InitialHandler.this, result, callback ) );
             }
         };
 
         if ( forced != null && listener.isPingPassthrough() )
         {
-            ((BungeeServerInfo) forced).ping( pingBack, handshake.getProtocolVersion() );
+            ( (BungeeServerInfo) forced ).ping( pingBack, handshake.getProtocolVersion() );
         } else
         {
-            int protocol = ( Protocol.supportedVersions.contains( handshake.getProtocolVersion() ) ) ? handshake.getProtocolVersion() : -1;
+            int protocol = ( Protocol.supportedVersions.contains( handshake.getProtocolVersion() ) ) ? handshake.getProtocolVersion() : bungee.getProtocolVersion();
             pingBack.done( new ServerPing(
-                    new ServerPing.Protocol( bungee.getGameVersion(), protocol ),
+                    new ServerPing.Protocol( bungee.getName() + " " + bungee.getGameVersion(), protocol ),
                     new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ),
-                    motd, BungeeCord.getInstance().config.favicon ),
+                    motd, BungeeCord.getInstance().config.getFaviconObject() ),
                     null );
         }
 
@@ -225,7 +274,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             }
         }
 
-        this.virtualHost = new InetSocketAddress( handshake.getHost(), handshake.getPort() );
+        this.virtualHost = InetSocketAddress.createUnresolved( handshake.getHost(), handshake.getPort() );
         bungee.getLogger().log( Level.INFO, "{0} has connected", this );
 
         bungee.getPluginManager().callEvent( new PlayerHandshakeEvent( InitialHandler.this, handshake ) );
@@ -259,6 +308,12 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             return;
         }
 
+        if ( getName().contains( "." ) )
+        {
+            disconnect( bungee.getTranslation( "name_invalid" ) );
+            return;
+        }
+
         if ( getName().length() > 16 )
         {
             disconnect( bungee.getTranslation( "name_too_long" ) );
@@ -279,9 +334,6 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             return;
         }
 
-        // TODO: Nuuuu Mojang why u do this
-        // unsafe().sendPacket( PacketConstants.I_AM_BUNGEE );
-        // unsafe().sendPacket( PacketConstants.FORGE_MOD_REQUEST );
         Callback<PreLoginEvent> callback = new Callback<PreLoginEvent>()
         {
 
@@ -291,6 +343,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 if ( result.isCancelled() )
                 {
                     disconnect( result.getCancelReason() );
+                    return;
                 }
                 if ( ch.isClosed() )
                 {
@@ -369,7 +422,14 @@ public class InitialHandler extends PacketHandler implements PendingConnection
         ProxiedPlayer old = bungee.getPlayer( getName() );
         if ( old != null )
         {
+            // TODO See #1218
             old.disconnect( bungee.getTranslation( "already_connected" ) );
+        }
+
+        offlineId = java.util.UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( Charsets.UTF_8 ) );
+        if ( uniqueId == null )
+        {
+            uniqueId = offlineId;
         }
 
         Callback<LoginEvent> complete = new Callback<LoginEvent>()
@@ -380,6 +440,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                 if ( result.isCancelled() )
                 {
                     disconnect( result.getCancelReason() );
+                    return;
                 }
                 if ( ch.isClosed() )
                 {
@@ -393,13 +454,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                     {
                         if ( ch.getHandle().isActive() )
                         {
-                            offlineId = java.util.UUID.nameUUIDFromBytes( ( "OfflinePlayer:" + getName() ).getBytes( Charsets.UTF_8 ) );
-                            if ( uniqueId == null )
-                            {
-                                uniqueId = offlineId;
-                            }
-                            // Version 5 == 1.7.6. This is a screwup as 1.7.6 was also a snapshot.
-                            if ( getVersion() == 5 )
+                            if ( getVersion() >= ProtocolConstants.MINECRAFT_1_7_6 )
                             {
                                 unsafe.sendPacket( new LoginSuccess( getUniqueId().toString(), getName() ) ); // With dashes in between
                             } else
@@ -445,20 +500,29 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     @Override
     public void disconnect(String reason)
     {
-        if ( !ch.isClosed() )
-        {
-            unsafe().sendPacket( new Kick( ComponentSerializer.toString( TextComponent.fromLegacyText( reason ) ) ) );
-            ch.close();
-        }
+        disconnect( TextComponent.fromLegacyText( reason ) );
     }
 
     @Override
-    public void disconnect(BaseComponent... reason)
+    public void disconnect(final BaseComponent... reason)
     {
         if ( !ch.isClosed() )
         {
-            unsafe().sendPacket( new Kick( ComponentSerializer.toString( reason ) ) );
-            ch.close();
+            // Why do we have to delay this you might ask? Well the simple reason is MOJANG.
+            // Despite many a bug report posted, ever since the 1.7 protocol rewrite, the client STILL has a race condition upon switching protocols.
+            // As such, despite the protocol switch packets already having been sent, there is the possibility of a client side exception
+            // To help combat this we will wait half a second before actually sending the disconnected packet so that whoever is on the other
+            // end has a somewhat better chance of receiving the proper packet.
+            ch.getHandle().eventLoop().schedule( new Runnable()
+            {
+
+                @Override
+                public void run()
+                {
+                    unsafe().sendPacket( new Kick( ComponentSerializer.toString( reason ) ) );
+                    ch.close();
+                }
+            }, 500, TimeUnit.MILLISECONDS );
         }
     }
 

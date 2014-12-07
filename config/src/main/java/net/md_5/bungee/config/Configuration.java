@@ -1,6 +1,8 @@
 package net.md_5.bungee.config;
 
+import com.google.common.collect.Sets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +17,14 @@ public final class Configuration
     private static final char SEPARATOR = '.';
     final Map<String, Object> self;
     private final Configuration defaults;
+
+    public Configuration() {
+        this( null );
+    }
+
+    public Configuration(Configuration defaults) {
+        this( new LinkedHashMap<String, Object>(), defaults );
+    }
 
     private Configuration getSectionFor(String path)
     {
@@ -64,7 +74,7 @@ public final class Configuration
 
     public Object get(String path)
     {
-        return get( path, null );
+        return get( path, getDefault( path ) );
     }
 
     public Object getDefault(String path)
@@ -77,7 +87,13 @@ public final class Configuration
         Configuration section = getSectionFor( path );
         if ( section == this )
         {
-            self.put( path, value );
+            if ( value == null )
+            {
+                self.remove( path );
+            } else
+            {
+                self.put( path, value );
+            }
         } else
         {
             section.set( getChild( path ), value );
@@ -89,6 +105,16 @@ public final class Configuration
     {
         Object def = getDefault( path );
         return new Configuration( (Map) ( get( path, ( def instanceof Map ) ? def : Collections.EMPTY_MAP ) ), ( defaults == null ) ? null : defaults.getSection( path ) );
+    }
+
+    /**
+     * Gets keys, not deep by default.
+     *
+     * @return top level keys for this section
+     */
+    public Collection<String> getKeys()
+    {
+        return Sets.newLinkedHashSet( self.keySet() );
     }
 
     /*------------------------------------------------------------------------*/

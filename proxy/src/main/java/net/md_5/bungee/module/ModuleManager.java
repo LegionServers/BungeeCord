@@ -1,6 +1,7 @@
 package net.md_5.bungee.module;
 
 import com.google.common.base.Preconditions;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -30,6 +31,10 @@ public class ModuleManager
         knownSources.put( "jenkins", new JenkinsModuleSource() );
     }
 
+    @SuppressFBWarnings(
+            {
+                "SF_SWITCH_FALLTHROUGH", "SF_SWITCH_NO_DEFAULT"
+            })
     public void load(ProxyServer proxy, File moduleDirectory) throws Exception
     {
         moduleDirectory.mkdir();
@@ -37,7 +42,7 @@ public class ModuleManager
         ModuleVersion bungeeVersion = ModuleVersion.parse( proxy.getVersion() );
         if ( bungeeVersion == null )
         {
-            System.out.println( "Could detect bungee version. Custom build?" );
+            System.out.println( "Couldn't detect bungee version. Custom build?" );
             return;
         }
 
@@ -125,6 +130,7 @@ public class ModuleManager
         }
     }
 
+    @SuppressFBWarnings("REC_CATCH_EXCEPTION")
     private ModuleVersion getVersion(File file)
     {
         try ( JarFile jar = new JarFile( file ) )

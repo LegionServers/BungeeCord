@@ -47,7 +47,10 @@ public class TextComponent extends BaseComponent
                     c += 32;
                 }
                 ChatColor format = ChatColor.getByChar( c );
-                if ( format == null ) continue;
+                if ( format == null )
+                {
+                    continue;
+                }
                 if ( builder.length() > 0 )
                 {
                     TextComponent old = component;
@@ -118,8 +121,8 @@ public class TextComponent extends BaseComponent
             components.add( component );
         }
 
-        //The client will crash if the array is empty
-        if ( components.size() == 0 )
+        // The client will crash if the array is empty
+        if ( components.isEmpty() )
         {
             components.add( new TextComponent( "" ) );
         }
@@ -145,14 +148,26 @@ public class TextComponent extends BaseComponent
     }
 
     /**
-     * Creates a TextComponent with blank text and the extras set
-     * to the passed array
+     * Creates a TextComponent with blank text and the extras set to the passed
+     * array
      *
      * @param extras the extras to set
      */
-    public TextComponent(BaseComponent ...extras) {
+    public TextComponent(BaseComponent... extras)
+    {
         setText( "" );
-        setExtra( Arrays.asList(extras) );
+        setExtra( Arrays.asList( extras ) );
+    }
+
+    /**
+     * Creates a duplicate of this TextComponent.
+     *
+     * @return the duplicate of this TextComponent.
+     */
+    @Override
+    public BaseComponent duplicate()
+    {
+        return new TextComponent( this );
     }
 
     @Override

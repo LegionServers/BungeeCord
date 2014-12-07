@@ -1,11 +1,12 @@
 package net.md_5.bungee.api;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import net.md_5.bungee.Util;
-
-import java.util.UUID;
 
 /**
  * Represents the standard list data returned by opening a server in the
@@ -73,5 +74,54 @@ public class ServerPing
         }
     }
     private String description;
-    private String favicon;
+    private Favicon favicon;
+
+    @Data
+    public static class ModInfo
+    {
+
+        private String type = "FML";
+        private List<ModItem> modList = new ArrayList<>();
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class ModItem
+    {
+
+        private String modid;
+        private String version;
+    }
+
+    // Right now, we don't get the mods from the user, so we just use a stock ModInfo object to
+    // create the server ping. Vanilla clients will ignore this.
+    private final ModInfo modinfo = new ModInfo();
+
+    @Deprecated
+    public ServerPing(Protocol version, Players players, String description, String favicon)
+    {
+        this( version, players, description, favicon == null ? null : Favicon.create( favicon ) );
+    }
+
+    @Deprecated
+    public String getFavicon()
+    {
+        return getFaviconObject() == null ? null : getFaviconObject().getEncoded();
+    }
+
+    public Favicon getFaviconObject()
+    {
+        return this.favicon;
+    }
+
+    @Deprecated
+    public void setFavicon(String favicon)
+    {
+        setFavicon( favicon == null ? null : Favicon.create( favicon ) );
+    }
+
+    public void setFavicon(Favicon favicon)
+    {
+        this.favicon = favicon;
+    }
 }

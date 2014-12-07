@@ -24,9 +24,9 @@ public class EncryptionUtil
 {
 
     private static final Random random = new Random();
-    public static KeyPair keys;
+    public static final KeyPair keys;
     @Getter
-    private static SecretKey secret = new SecretKeySpec( new byte[ 16 ], "AES" );
+    private static final SecretKey secret = new SecretKeySpec( new byte[ 16 ], "AES" );
 
     static
     {

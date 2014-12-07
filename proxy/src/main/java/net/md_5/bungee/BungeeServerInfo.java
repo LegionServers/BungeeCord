@@ -5,7 +5,6 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -17,6 +16,7 @@ import java.util.Queue;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
+import lombok.ToString;
 import net.md_5.bungee.api.Callback;
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.ProxyServer;
@@ -31,6 +31,10 @@ import net.md_5.bungee.protocol.DefinedPacket;
 import net.md_5.bungee.protocol.packet.PluginMessage;
 
 @RequiredArgsConstructor
+@ToString(of =
+{
+    "name", "address", "restricted"
+})
 public class BungeeServerInfo implements ServerInfo
 {
 
@@ -84,9 +88,15 @@ public class BungeeServerInfo implements ServerInfo
         return address.hashCode();
     }
 
-    // TODO: Don't like this method
     @Override
     public void sendData(String channel, byte[] data)
+    {
+        sendData( channel, data, true );
+    }
+
+    // TODO: Don't like this method
+    @Override
+    public boolean sendData(String channel, byte[] data, boolean queue)
     {
         Preconditions.checkNotNull( channel, "channel" );
         Preconditions.checkNotNull( data, "data" );
@@ -97,10 +107,12 @@ public class BungeeServerInfo implements ServerInfo
             if ( server != null )
             {
                 server.sendData( channel, data );
-            } else
+                return true;
+            } else if ( queue )
             {
-                packetQueue.add( new PluginMessage( channel, data ) );
+                packetQueue.add( new PluginMessage( channel, data, false ) );
             }
+            return false;
         }
     }
 
@@ -129,7 +141,7 @@ public class BungeeServerInfo implements ServerInfo
             }
         };
         new Bootstrap()
-                .channel( NioSocketChannel.class )
+                .channel( PipelineUtils.getChannel() )
                 .group( BungeeCord.getInstance().eventLoops )
                 .handler( PipelineUtils.BASE )
                 .option( ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000 ) // TODO: Configurable
