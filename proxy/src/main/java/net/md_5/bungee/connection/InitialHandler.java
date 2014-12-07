@@ -236,7 +236,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             pingBack.done( new ServerPing(
                     new ServerPing.Protocol( bungee.getName() + " " + bungee.getGameVersion(), protocol ),
                     new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ),
-                    motd, BungeeCord.getInstance().config.getFavicon() ),
+                    listener.getMotd(), BungeeCord.getInstance().config.getFaviconObject() ),
                     null );
         }
 
