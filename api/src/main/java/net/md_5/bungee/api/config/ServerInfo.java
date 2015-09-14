@@ -4,6 +4,7 @@ import java.net.InetSocketAddress;
 import java.util.Collection;
 import net.md_5.bungee.api.Callback;
 import net.md_5.bungee.api.CommandSender;
+import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ServerPing;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 
@@ -80,4 +81,7 @@ public interface ServerInfo
      * @param callback the callback to call when the count has been retrieved.
      */
     void ping(Callback<ServerPing> callback);
+    
+    Favicon getFaviconObject();
+    boolean isPingPassthrough();
 }

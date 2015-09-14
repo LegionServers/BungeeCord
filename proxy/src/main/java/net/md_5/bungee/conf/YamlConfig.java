@@ -15,9 +15,13 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.logging.Level;
+
+import javax.imageio.ImageIO;
+
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.Util;
 import net.md_5.bungee.api.ChatColor;
+import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.config.ConfigurationAdapter;
 import net.md_5.bungee.api.config.ListenerInfo;
@@ -170,10 +174,20 @@ public class YamlConfig implements ConfigurationAdapter
             Map<String, Object> val = entry.getValue();
             String name = entry.getKey();
             String addr = get( "address", "localhost:25565", val );
-            String motd = ChatColor.translateAlternateColorCodes( '&', get( "motd", "&1Just another BungeeCord - Forced Host", val ) );
+            String motd = ChatColor.translateAlternateColorCodes( '&', get( "motd", "unset", val ) );
             boolean restricted = get( "restricted", false, val );
+            boolean passthrough = get( "passthrough", false, val );
             InetSocketAddress address = Util.getAddr( addr );
-            ServerInfo info = ProxyServer.getInstance().constructServerInfo( name, address, motd, restricted );
+            String faviconPath = get( "favicon", null, val );
+            Favicon favicon = null;
+            if ( faviconPath != null ) {
+            	try {
+            		favicon = Favicon.create( ImageIO.read( new File( faviconPath ) ) );
+            	} catch ( IOException ex ) {
+            		// Ignore.
+            	}
+            }
+            ServerInfo info = ProxyServer.getInstance().constructServerInfo( name, address, motd, restricted, favicon, passthrough );
             ret.put( name, info );
         }
 

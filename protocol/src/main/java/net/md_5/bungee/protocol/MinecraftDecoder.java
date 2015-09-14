@@ -21,7 +21,11 @@ public class MinecraftDecoder extends ByteToMessageDecoder
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception
     {
         Protocol.DirectionData prot = ( server ) ? protocol.TO_SERVER : protocol.TO_CLIENT;
-        ByteBuf copy = in.copy(); // TODO
+        //ByteBuf copy = in.copy(); // TODO
+        ByteBuf copy = in.alloc().buffer( in.capacity() );
+        int readerIdx = in.readerIndex();
+        in.readBytes( copy );
+        in.readerIndex( readerIdx );
 
         int packetId = DefinedPacket.readVarInt( in );
 

@@ -7,6 +7,7 @@ import java.util.Objects;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import lombok.RequiredArgsConstructor;
 import net.md_5.bungee.ServerConnection;
@@ -109,6 +110,27 @@ public class DownstreamBridge extends PacketHandler
     {
         if ( !server.isObsolete() )
         {
+        	/*try {
+        		ByteBuf dup = packet.buf.copy();
+        		String displayName = con.getDisplayName();
+        		if(displayName == null)
+        			displayName = "<null>";
+        		String packetName = null;
+        		if (packet.packet != null)
+        			packetName = packet.packet.getClass().getCanonicalName();
+        		if(packetName == null)
+        			packetName = "<null>";
+        		String packetString = dup.toString();
+        		if(packetString == null)
+        			packetString = "<null>";
+        		String packetHex = ByteBufUtil.hexDump(dup);
+        		if(packetHex == null)
+        			packetHex = "<null>";
+        		String line = "[S->C] [" + displayName + "] " + packetName + ": " + packetString + ": " + packetHex;
+        		System.out.println(line);
+        	} catch(Exception ex) {
+        		ex.printStackTrace();
+        	}*/
             con.getEntityRewrite().rewriteClientbound( packet.buf, con.getServerEntityId(), con.getClientEntityId() );
             con.sendPacket( packet );
         }

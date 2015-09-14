@@ -197,8 +197,9 @@ public class InitialHandler extends PacketHandler implements PendingConnection
     {
         Preconditions.checkState( thisState == State.STATUS, "Not expecting STATUS" );
 
-        ServerInfo forced = AbstractReconnectHandler.getForcedHost( this );
-        final String motd = ( forced != null ) ? forced.getMotd() : listener.getMotd();
+        final ServerInfo forced = AbstractReconnectHandler.getForcedHost( this );
+        final String motd = ( forced != null ) ? ( forced.getMotd().equals("unset") ? listener.getMotd() : forced.getMotd() ) : listener.getMotd();
+        final Favicon favicon = ( forced != null ) ? ( forced.getFaviconObject() == null ? BungeeCord.getInstance().config.getFaviconObject() : forced.getFaviconObject() ) : BungeeCord.getInstance().config.getFaviconObject();
 
         Callback<ServerPing> pingBack = new Callback<ServerPing>()
         {
@@ -222,12 +223,16 @@ public class InitialHandler extends PacketHandler implements PendingConnection
                         unsafe.sendPacket( new StatusResponse( gson.toJson( pingResult.getResponse() ) ) );
                     }
                 };
-
-                bungee.getPluginManager().callEvent( new ProxyPingEvent( InitialHandler.this, result, callback ) );
+                ProxyPingEvent event = new ProxyPingEvent( InitialHandler.this, result, callback );
+                if ( forced.isPingPassthrough() ) {
+                	callback.done(event, null);
+                } else {
+                	bungee.getPluginManager().callEvent( new ProxyPingEvent( InitialHandler.this, result, callback ) );
+                }
             }
         };
 
-        if ( forced != null && listener.isPingPassthrough() )
+        if ( forced != null && ( listener.isPingPassthrough() || forced.isPingPassthrough() ) )
         {
             ( (BungeeServerInfo) forced ).ping( pingBack, handshake.getProtocolVersion() );
         } else
@@ -236,7 +241,7 @@ public class InitialHandler extends PacketHandler implements PendingConnection
             pingBack.done( new ServerPing(
                     new ServerPing.Protocol( bungee.getName() + " " + bungee.getGameVersion(), protocol ),
                     new ServerPing.Players( listener.getMaxPlayers(), bungee.getOnlineCount(), null ),
-                    listener.getMotd(), BungeeCord.getInstance().config.getFaviconObject() ),
+                    motd, favicon ),
                     null );
         }
 

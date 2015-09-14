@@ -19,6 +19,7 @@ import lombok.Synchronized;
 import lombok.ToString;
 import net.md_5.bungee.api.Callback;
 import net.md_5.bungee.api.CommandSender;
+import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.ServerPing;
 import net.md_5.bungee.api.config.ServerInfo;
@@ -49,6 +50,10 @@ public class BungeeServerInfo implements ServerInfo
     private final boolean restricted;
     @Getter
     private final Queue<DefinedPacket> packetQueue = new LinkedList<>();
+    @Getter
+    private final Favicon favicon;
+    @Getter
+    private final boolean pingPassthrough;
 
     @Synchronized("players")
     public void addPlayer(ProxiedPlayer player)
@@ -148,5 +153,10 @@ public class BungeeServerInfo implements ServerInfo
                 .remoteAddress( getAddress() )
                 .connect()
                 .addListener( listener );
+    }
+    
+    @Override
+    public Favicon getFaviconObject() {
+    	return favicon;
     }
 }
